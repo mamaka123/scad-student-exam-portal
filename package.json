@@ -2,9 +2,8 @@
   "name": "college-learning-exam-portal",
   "version": "1.0.0",
   "description": "SCAD College of Engineering & Technology - Student Portal & Online Examination System",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node dev-server.js"
   },
   "keywords": [
     "lms",

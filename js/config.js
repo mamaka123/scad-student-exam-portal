@@ -41,6 +41,26 @@ const AD_NETWORKS = [
   { id: 'custom_html', label: '💻 Custom HTML / Rich Media Script', desc: 'Arbitrary custom HTML, iframe, video embed, or banner script' }
 ];
 
+const BANNER_SIZES = [
+  { id: 'auto', label: '⚡ Auto Responsive (Fit to Creative / Screen)', width: null, height: null, category: 'Responsive' },
+  { id: '728x90', label: 'PNG 728×90 px (Leaderboard - Wide)', width: 728, height: 90, category: 'Horizontal' },
+  { id: '700x90', label: 'PNG 700×90 px (Large Banner)', width: 700, height: 90, category: 'Horizontal' },
+  { id: '600x250', label: 'PNG 600×250 px (Large Rectangle)', width: 600, height: 250, category: 'Rectangle' },
+  { id: '468x120', label: 'PNG 468×120 px (Extended Banner)', width: 468, height: 120, category: 'Horizontal' },
+  { id: '468x60', label: 'PNG 468×60 px (Classic Banner)', width: 468, height: 60, category: 'Horizontal' },
+  { id: '300x425', label: 'PNG 300×425 px (Tall Rectangle)', width: 300, height: 425, category: 'Vertical' },
+  { id: '300x250', label: 'PNG 300×250 px (Medium Rectangle / MPU)', width: 300, height: 250, category: 'Rectangle' },
+  { id: '250x250', label: 'PNG 250×250 px (Square)', width: 250, height: 250, category: 'Square' },
+  { id: '200x200', label: 'PNG 200×200 px (Small Square)', width: 200, height: 200, category: 'Square' },
+  { id: '160x600', label: 'PNG 160×600 px (Wide Skyscraper - Vertical)', width: 160, height: 600, category: 'Skyscraper' },
+  { id: '120x600', label: 'PNG 120×600 px (Skyscraper - Vertical)', width: 120, height: 600, category: 'Skyscraper' },
+  { id: '120x300', label: 'PNG 120×300 px (Half Skyscraper)', width: 120, height: 300, category: 'Vertical' },
+  { id: '120x150', label: 'PNG 120×150 px (Small Vertical)', width: 120, height: 150, category: 'Vertical' },
+  { id: '160x90', label: 'PNG 160×90 px (Small Button)', width: 160, height: 90, category: 'Button' },
+  { id: '120x60', label: 'PNG 120×60 px (Mini Banner)', width: 120, height: 60, category: 'Button' },
+  { id: '80x30', label: 'PNG 80×30 px (Micro Button)', width: 80, height: 30, category: 'Micro' }
+];
+
 const DEFAULT_YEARS_SECTIONS = {
   years: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
   sections: ["A", "B", "C"]
@@ -88,6 +108,7 @@ const FIREBASE_CONFIG = {
 window.APP_KEYS = APP_KEYS;
 window.AD_PLACEMENTS = AD_PLACEMENTS;
 window.AD_NETWORKS = AD_NETWORKS;
+window.BANNER_SIZES = BANNER_SIZES;
 window.DEFAULT_YEARS_SECTIONS = DEFAULT_YEARS_SECTIONS;
 window.DEFAULT_ADMINS = DEFAULT_ADMINS;
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;

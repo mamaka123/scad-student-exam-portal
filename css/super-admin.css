@@ -429,6 +429,15 @@
   animation: fadeIn 0.3s ease-out forwards;
 }
 
+.portal-ad-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .ad-banner-card {
   position: relative;
   border-radius: 12px;
@@ -436,6 +445,12 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   border: 1px solid var(--bg-dark-border, rgba(255, 255, 255, 0.1));
   background: var(--bg-dark-card, #131d31);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  transition: all 0.25s ease;
 }
 
 [data-theme="light"] .ad-banner-card {
@@ -448,7 +463,7 @@
   top: 6px;
   right: 8px;
   z-index: 5;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   color: #94a3b8;
   font-size: 0.64rem;
   font-weight: 700;
@@ -461,10 +476,11 @@
 }
 
 .ad-banner-img {
-  width: 100%;
-  max-height: 140px;
-  object-fit: cover;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
   display: block;
+  margin: 0 auto;
   transition: transform 0.25s ease;
 }
 
@@ -472,29 +488,109 @@
   transform: scale(1.015);
 }
 
-/* Specific Placements */
-.login-ad-slot {
-  margin: 1rem auto 0 auto;
-  max-width: 440px;
+.ad-embed-body {
   width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
 }
 
-.student-dash-top-ad {
+.ad-embed-body iframe,
+.ad-embed-body ins,
+.ad-embed-body img,
+.ad-embed-body > div {
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  display: block !important;
+}
+
+/* Specific Placements & Dimension Support */
+.login-ad-slot {
+  margin: 1.5rem auto 0 auto;
+  max-width: 760px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
+}
+
+.logout-ad-slot {
+  margin: 1.5rem auto 0 auto;
+  max-width: 760px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0.5rem;
+}
+
+.student-dash-top-ad,
+.notice-board-ad-slot,
+.exam-result-ad-slot,
+.notes-footer-ad-slot {
   margin-bottom: 1.25rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .student-dash-sidebar-ad {
   margin-bottom: 1.25rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .compiler-ad-slot {
   padding: 0.4rem 0.85rem;
   background: #090d16;
   border-bottom: 1px solid #1e293b;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .exam-ad-slot {
   padding: 0.35rem 1rem;
   background: rgba(15, 23, 42, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Precise Dimension Constraints for Standard Ad Sizes */
+.ad-size-728x90  { max-width: 728px; }
+.ad-size-700x90  { max-width: 700px; }
+.ad-size-600x250 { max-width: 600px; }
+.ad-size-468x120 { max-width: 468px; }
+.ad-size-468x60  { max-width: 468px; }
+.ad-size-300x425 { max-width: 300px; }
+.ad-size-300x250 { max-width: 300px; }
+.ad-size-250x250 { max-width: 250px; }
+.ad-size-200x200 { max-width: 200px; }
+.ad-size-160x600 { max-width: 160px; }
+.ad-size-120x600 { max-width: 120px; }
+.ad-size-120x300 { max-width: 120px; }
+.ad-size-120x150 { max-width: 120px; }
+.ad-size-160x90  { max-width: 160px; }
+.ad-size-120x60  { max-width: 120px; }
+.ad-size-80x30   { max-width: 80px; }
+
+/* Responsive Mobile Scaling: ensure wide banners shrink proportionally on phones */
+@media (max-width: 768px) {
+  .ad-size-728x90,
+  .ad-size-700x90,
+  .ad-size-600x250,
+  .ad-size-468x120,
+  .ad-size-468x60 {
+    max-width: 100% !important;
+  }
 }

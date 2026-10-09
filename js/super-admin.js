@@ -359,6 +359,13 @@ class SuperAdminDashboardController {
             <span class="badge" style="background: rgba(14, 165, 233, 0.12); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); font-weight: 600; padding: 3px 8px; border-radius: 8px; font-size: 0.74rem;">
               📍 ${placementLabel}
             </span>
+            ${ad.size && ad.size !== 'auto' ? `
+              <div style="margin-top: 4px;">
+                <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.25); font-weight: 600; padding: 2px 7px; border-radius: 6px; font-size: 0.7rem;">
+                  📐 ${escapeHtml(ad.size)}
+                </span>
+              </div>
+            ` : ''}
           </td>
           <td style="max-width: 180px;">
             <div style="max-width: 180px; max-height: 48px; overflow: hidden; border-radius: 6px; border: 1px solid var(--bg-dark-border, #cbd5e1); background: var(--bg-dark-surface, #f8fafc); display: flex; align-items: center; justify-content: center;">
@@ -510,6 +517,8 @@ class SuperAdminDashboardController {
   openAddAdModal() {
     const form = document.getElementById('form-super-add-ad');
     if (form) form.reset();
+    const sizeSelect = document.getElementById('super-add-ad-size');
+    if (sizeSelect) sizeSelect.value = 'auto';
     const fileInfo = document.getElementById('super-add-ad-file-info');
     if (fileInfo) {
       fileInfo.style.display = 'none';
@@ -533,6 +542,8 @@ class SuperAdminDashboardController {
     document.getElementById('super-edit-ad-title').value = ad.title || '';
     document.getElementById('super-edit-ad-network').value = ad.network || 'custom_banner';
     document.getElementById('super-edit-ad-placement').value = ad.placement || 'login_banner';
+    const editSizeSelect = document.getElementById('super-edit-ad-size');
+    if (editSizeSelect) editSizeSelect.value = ad.size || 'auto';
     document.getElementById('super-edit-ad-image-url').value = ad.imageUrl || '';
     document.getElementById('super-edit-ad-target-url').value = ad.targetUrl || '';
     document.getElementById('super-edit-ad-alt-text').value = ad.altText || '';
@@ -653,6 +664,7 @@ class SuperAdminDashboardController {
     const title = document.getElementById('super-add-ad-title').value.trim();
     const network = document.getElementById('super-add-ad-network').value;
     const placement = document.getElementById('super-add-ad-placement').value;
+    const size = (document.getElementById('super-add-ad-size') ? document.getElementById('super-add-ad-size').value : 'auto');
     const imageUrl = document.getElementById('super-add-ad-image-url').value.trim();
     const targetUrl = document.getElementById('super-add-ad-target-url').value.trim();
     const altText = document.getElementById('super-add-ad-alt-text').value.trim();
@@ -664,6 +676,7 @@ class SuperAdminDashboardController {
         title,
         network,
         placement,
+        size,
         imageUrl,
         targetUrl,
         altText,
@@ -687,6 +700,7 @@ class SuperAdminDashboardController {
     const title = document.getElementById('super-edit-ad-title').value.trim();
     const network = document.getElementById('super-edit-ad-network').value;
     const placement = document.getElementById('super-edit-ad-placement').value;
+    const size = (document.getElementById('super-edit-ad-size') ? document.getElementById('super-edit-ad-size').value : 'auto');
     const imageUrl = document.getElementById('super-edit-ad-image-url').value.trim();
     const targetUrl = document.getElementById('super-edit-ad-target-url').value.trim();
     const altText = document.getElementById('super-edit-ad-alt-text').value.trim();
@@ -698,6 +712,7 @@ class SuperAdminDashboardController {
         title,
         network,
         placement,
+        size,
         imageUrl,
         targetUrl,
         altText,
@@ -778,17 +793,30 @@ class SuperAdminDashboardController {
       const ad = activeAds[0];
       el.style.display = 'block';
 
+      // Find banner size configuration (IAB & Adsterra standards)
+      const sizeKey = ad.size || 'auto';
+      const sizeDef = (window.BANNER_SIZES || []).find(s => s.id === sizeKey);
+      const hasFixedSize = sizeDef && sizeDef.width && sizeDef.height;
+      const sizeWidth = hasFixedSize ? sizeDef.width : null;
+      const sizeHeight = hasFixedSize ? sizeDef.height : null;
+
+      const sizeAttrStyle = hasFixedSize 
+        ? `max-width: ${sizeWidth}px; width: 100%;` 
+        : 'max-width: 100%; width: 100%;';
+      const sizeTag = hasFixedSize ? ` • ${sizeWidth}×${sizeHeight}` : '';
+
       if (ad.network === 'custom_banner') {
         const linkHref = ad.targetUrl || 'javascript:void(0)';
         const targetAttr = ad.targetUrl ? 'target="_blank" rel="noopener noreferrer"' : '';
         const clickHandler = ad.targetUrl ? `onclick="storage.recordAdClick('${ad.id}')"` : '';
+        const imgMaxHeight = hasFixedSize ? `max-height: ${sizeHeight}px;` : '';
 
         el.innerHTML = `
-          <div class="ad-banner-card" style="position: relative;">
-            <span class="ad-sponsored-tag">Sponsored</span>
-            <a href="${escapeHtml(linkHref)}" ${targetAttr} ${clickHandler} style="display: block; text-decoration: none;">
-              <img src="${escapeHtml(ad.imageUrl)}" alt="${escapeHtml(ad.altText || ad.title)}" class="ad-banner-img" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
-              <div class="ad-fallback-banner" style="display: none; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid rgba(245, 158, 11, 0.4); padding: 1rem 1.25rem; border-radius: 12px; align-items: center; justify-content: space-between; gap: 1rem;">
+          <div class="ad-banner-card ad-size-${escapeHtml(sizeKey)}" style="position: relative; ${sizeAttrStyle} margin: 0 auto;">
+            <span class="ad-sponsored-tag">Sponsored${sizeTag}</span>
+            <a href="${escapeHtml(linkHref)}" ${targetAttr} ${clickHandler} style="display: flex; justify-content: center; align-items: center; text-decoration: none; width: 100%;">
+              <img src="${escapeHtml(ad.imageUrl)}" alt="${escapeHtml(ad.altText || ad.title)}" class="ad-banner-img" style="max-width: 100%; height: auto; ${imgMaxHeight} object-fit: contain; margin: 0 auto; display: block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+              <div class="ad-fallback-banner" style="display: none; width: 100%; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid rgba(245, 158, 11, 0.4); padding: 1rem 1.25rem; border-radius: 12px; align-items: center; justify-content: space-between; gap: 1rem;">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                   <span style="font-size: 1.6rem;">🎓</span>
                   <div>
@@ -802,13 +830,15 @@ class SuperAdminDashboardController {
           </div>
         `;
       } else {
-        // Embed code for AdSense, Meta, or Rich HTML
+        // Embed code for AdSense, Adsterra, Propeller, Meta, or Rich HTML
         const wrapper = document.createElement('div');
-        wrapper.className = 'ad-banner-card ad-embed-container';
+        wrapper.className = `ad-banner-card ad-embed-container ad-size-${escapeHtml(sizeKey)}`;
+        const minHeightStyle = hasFixedSize ? `min-height: ${sizeHeight}px;` : 'min-height: 60px;';
+
         wrapper.innerHTML = `
-          <div style="position: relative; min-height: 90px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 10px;">
-            <span class="ad-sponsored-tag" style="z-index: 10;">Sponsored • ${(ad.network || 'AD').toUpperCase()}</span>
-            <div class="ad-embed-body" style="width: 100%; padding: 0.5rem; overflow: hidden; text-align: center;">
+          <div style="position: relative; ${sizeAttrStyle} ${minHeightStyle} margin: 0 auto; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 10px;">
+            <span class="ad-sponsored-tag" style="z-index: 10;">Sponsored • ${(ad.network || 'AD').toUpperCase()}${sizeTag}</span>
+            <div class="ad-embed-body" style="width: 100%; max-width: 100%; padding: 0.5rem; overflow: hidden; display: flex; justify-content: center; align-items: center; text-align: center;">
               ${ad.codeSnippet || ''}
             </div>
           </div>

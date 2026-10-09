@@ -540,6 +540,7 @@ class StorageService {
       title: title,
       network: network, // 'custom_banner' | 'adsense' | 'meta' | 'custom_html'
       placement: placement, // 'login_banner' | 'student_dash_top' | 'student_dash_sidebar' | 'compiler_banner' | 'exam_header'
+      size: adData.size || 'auto', // 'auto' | '728x90' | '468x60' | '300x250' etc.
       imageUrl: (adData.imageUrl || '').trim(),
       targetUrl: (adData.targetUrl || '').trim(),
       altText: (adData.altText || '').trim(),
@@ -564,6 +565,7 @@ class StorageService {
     if (updateData.title !== undefined) targetAd.title = updateData.title.trim();
     if (updateData.network !== undefined) targetAd.network = updateData.network;
     if (updateData.placement !== undefined) targetAd.placement = updateData.placement;
+    if (updateData.size !== undefined) targetAd.size = updateData.size;
     if (updateData.imageUrl !== undefined) targetAd.imageUrl = updateData.imageUrl.trim();
     if (updateData.targetUrl !== undefined) targetAd.targetUrl = updateData.targetUrl.trim();
     if (updateData.altText !== undefined) targetAd.altText = updateData.altText.trim();

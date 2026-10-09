@@ -806,22 +806,39 @@ class SuperAdminDashboardController {
         const wrapper = document.createElement('div');
         wrapper.className = 'ad-banner-card ad-embed-container';
         wrapper.innerHTML = `
-          <div style="position: relative;">
-            <span class="ad-sponsored-tag">Sponsored • ${ad.network.toUpperCase()}</span>
-            <div class="ad-embed-body" style="padding: 0.5rem; overflow: hidden;">
-              ${ad.codeSnippet}
+          <div style="position: relative; min-height: 90px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 10px;">
+            <span class="ad-sponsored-tag" style="z-index: 10;">Sponsored • ${(ad.network || 'AD').toUpperCase()}</span>
+            <div class="ad-embed-body" style="width: 100%; padding: 0.5rem; overflow: hidden; text-align: center;">
+              ${ad.codeSnippet || ''}
             </div>
           </div>
         `;
         el.innerHTML = '';
         el.appendChild(wrapper);
 
-        // If AdSense push script required:
-        try {
-          if (ad.network === 'adsense' && window.adsbygoogle) {
-            (adsbygoogle = window.adsbygoogle || []).push({});
+        // Dynamically execute any <script> tags present inside the codeSnippet
+        const scriptTags = wrapper.querySelectorAll('script');
+        scriptTags.forEach(oldScript => {
+          const newScript = document.createElement('script');
+          Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+          if (oldScript.src) {
+            newScript.async = true;
+          } else {
+            newScript.textContent = oldScript.textContent;
           }
-        } catch (e) {}
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+
+        // Trigger Google AdSense if present
+        if (ad.codeSnippet && ad.codeSnippet.includes('adsbygoogle')) {
+          setTimeout(() => {
+            try {
+              (window.adsbygoogle = window.adsbygoogle || []).push({});
+            } catch (adErr) {
+              console.log('AdSense init notice:', adErr);
+            }
+          }, 300);
+        }
       }
     });
   }

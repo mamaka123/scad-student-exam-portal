@@ -597,30 +597,10 @@ window.quickSelectStudent = function(regNo) {
   }
 };
 
-// Render recent/saved students on this device
+// Registered student chips permanently disabled for privacy
 window.renderRecentStudents = function() {
-  const container = document.getElementById('student-recent-chips');
   const wrap = document.getElementById('student-recent-accounts-wrap');
-  if (!container || !wrap) return;
-
-  const students = (window.storage && typeof storage.getStudents === 'function') ? storage.getStudents() : [];
-  if (!students || students.length === 0) {
-    wrap.style.display = 'none';
-    return;
-  }
-
-  wrap.style.display = 'block';
-  container.innerHTML = students.map(s => {
-    return `
-      <button type="button" class="btn btn-secondary btn-sm" onclick="window.quickSelectStudent('${escapeHtml(s.regNo)}')" style="border-radius: 9999px; padding: 0.25rem 0.65rem; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; cursor: pointer;" title="Login as ${escapeHtml(s.name)}">
-        <span style="width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold;">
-          ${escapeHtml((s.name || 'S').charAt(0).toUpperCase())}
-        </span>
-        <span>${escapeHtml(s.name)}</span>
-        <span style="opacity: 0.65; font-size: 0.72rem;">(${escapeHtml(s.regNo)})</span>
-      </button>
-    `;
-  }).join('');
+  if (wrap) wrap.style.display = 'none';
 };
 
 window.onStudentRegYearChange = function(year) {

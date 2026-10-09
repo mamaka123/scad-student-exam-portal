@@ -481,31 +481,36 @@ class StudentDashboardController {
   loadAdminCodingQuestions(targetQId = null) {
     const select = document.getElementById('lab-problem-select');
     const badgeCount = document.getElementById('lab-prob-count-badge');
+    const toggleProblemBtn = document.getElementById('btn-lab-toggle-problem');
+    const drawer = document.getElementById('lab-problem-drawer');
+    const backdrop = document.getElementById('lab-drawer-backdrop');
     const allQuestions = storage.getQuestions();
 
-    const studentYear = (this.currentStudent.year || '').trim().toLowerCase();
-    const studentSec = (this.currentStudent.section || '').trim().toLowerCase();
+    const studentYear = (this.currentStudent?.year || '').trim().toLowerCase();
+    const studentSec = (this.currentStudent?.section || '').trim().toLowerCase();
 
-    // Filter questions uploaded by admin that match student's year & section (or All)
+    // STRICT: Only coding questions specifically uploaded by staff/faculty for this student's year & section (or All)
     this.assignedCodingQuestions = allQuestions.filter(q => {
       if (q.type !== 'coding') return false;
-      const qYear = (q.year || 'All').trim().toLowerCase();
-      const qSec = (q.section || 'All').trim().toLowerCase();
-      const yearMatch = qYear === 'all' || qYear === studentYear;
-      const secMatch = qSec === 'all' || qSec === studentSec;
+      const qYear = (q.year || '').trim().toLowerCase();
+      const qSec = (q.section || '').trim().toLowerCase();
+      // Question must explicitly match student cohort or be designated for All
+      const yearMatch = qYear === 'all' || (qYear && studentYear && qYear === studentYear);
+      const secMatch = qSec === 'all' || (qSec && studentSec && qSec === studentSec);
       return yearMatch && secMatch;
     });
 
-    // Fallback 1: If no specific question matches student's year/section, show any available coding questions
+    // If NO coding questions assigned by staff for this student:
     if (this.assignedCodingQuestions.length === 0) {
-      this.assignedCodingQuestions = allQuestions.filter(q => q.type === 'coding');
-    }
-
-    // If none assigned or in storage, show clean Free Practice Mode (no auto-seeding demo questions)
-    if (this.assignedCodingQuestions.length === 0) {
+      if (toggleProblemBtn) toggleProblemBtn.style.display = 'none';
+      if (drawer) {
+        drawer.classList.add('collapsed');
+        drawer.style.display = 'none';
+      }
+      if (backdrop) backdrop.classList.remove('active');
       if (badgeCount) badgeCount.textContent = '0';
       if (select) {
-        select.innerHTML = '<option value="">Free Practice Mode (No Questions Assigned)</option>';
+        select.innerHTML = '<option value="">💻 Free Code Playground (No Questions Assigned)</option>';
         select.value = '';
       }
       this.activeCodingQuestion = null;
@@ -513,34 +518,57 @@ class StudentDashboardController {
       return;
     }
 
-    if (badgeCount) {
-      badgeCount.textContent = this.assignedCodingQuestions.length;
+    // Coding questions EXIST from staff:
+    if (toggleProblemBtn) toggleProblemBtn.style.display = 'inline-flex';
+    if (drawer) drawer.style.display = '';
+    if (badgeCount) badgeCount.textContent = this.assignedCodingQuestions.length;
+
+    if (select) {
+      // First option is always Free Code Playground mode!
+      let optionsHtml = `<option value="">💻 Free Code Playground (Custom Code)</option>`;
+      optionsHtml += this.assignedCodingQuestions.map((q, idx) => {
+        const qTitle = q.title || (q.text ? q.text.split('\n')[0].replace(/^#*\s*/, '').substring(0, 30) : `Problem ${idx + 1}`);
+        const qFaculty = q.createdByName || storage.getAdminDisplayName(q.createdBy, 'Faculty Staff');
+        return `<option value="${escapeHtml(q.id)}">Q${idx + 1}: ${escapeHtml(qTitle)} (${q.marks || 10}M) • 👨‍🏫 ${escapeHtml(qFaculty)}</option>`;
+      }).join('');
+      select.innerHTML = optionsHtml;
     }
 
-    if (!select) return;
-
-    select.innerHTML = this.assignedCodingQuestions.map((q, idx) => {
-      const qTitle = q.title || (q.text ? q.text.split('\n')[0].replace(/^#*\s*/, '').substring(0, 30) : `Problem ${idx + 1}`);
-      const qFaculty = q.createdByName || storage.getAdminDisplayName(q.createdBy, 'Faculty Staff');
-      return `<option value="${escapeHtml(q.id)}">Q${idx + 1}: ${escapeHtml(qTitle)} (${q.marks || 10}M) • 👨‍🏫 ${escapeHtml(qFaculty)}</option>`;
-    }).join('');
-
-    const initialQId = targetQId || this.assignedCodingQuestions[0].id;
-    select.value = initialQId;
-    this.onLabProblemChange(initialQId, true);
+    // If student explicitly requested a specific question (e.g. clicked "Solve" on dashboard)
+    if (targetQId && this.assignedCodingQuestions.some(q => q.id === targetQId)) {
+      if (select) select.value = targetQId;
+      this.onLabProblemChange(targetQId, true);
+    } else {
+      // Default: Free Code Playground mode!
+      if (select) select.value = '';
+      this.activeCodingQuestion = null;
+      this.renderLabProblemDetails(null);
+      this.toggleLabProblemDrawer(false);
+    }
   }
 
   onLabProblemChange(qId, isInitial = false) {
-    if (!this.assignedCodingQuestions || this.assignedCodingQuestions.length === 0) {
+    if (!qId) {
+      // Free Code Playground mode selected
+      this.activeCodingQuestion = null;
+      this.renderLabProblemDetails(null);
+      if (window.innerWidth <= 1024 && !isInitial) {
+        this.toggleLabProblemDrawer(false);
+      }
+      return;
+    }
+
+    const q = (this.assignedCodingQuestions || []).find(item => item.id === qId);
+    if (!q) {
+      this.activeCodingQuestion = null;
       this.renderLabProblemDetails(null);
       return;
     }
 
-    const q = this.assignedCodingQuestions.find(item => item.id === qId) || this.assignedCodingQuestions[0];
     this.activeCodingQuestion = q;
     this.renderLabProblemDetails(q);
 
-    // Sync IDE language with the question's specified language
+    // Sync IDE language with the question's specified language silently (no intrusive toast)
     if (q && q.language) {
       const LANG_META = {
         python: { label: 'Python 3', ver: '3.8.1', icon: '🐍' },
@@ -550,7 +578,7 @@ class StudentDashboardController {
         java: { label: 'Java (OpenJDK)', ver: '13.0.1', icon: '☕' }
       };
       const meta = LANG_META[q.language.toLowerCase()] || LANG_META.python;
-      this.selectLabLanguage(q.language.toLowerCase(), meta.label, meta.ver, meta.icon);
+      this.selectLabLanguage(q.language.toLowerCase(), meta.label, meta.ver, meta.icon, null, true);
     }
 
     // Do not automatically show or overwrite code in the editor
@@ -579,25 +607,35 @@ class StudentDashboardController {
     const sampleInEl = document.getElementById('lab-prob-sample-input');
     const expOutEl = document.getElementById('lab-prob-expected-output');
     const resultsWrap = document.getElementById('lab-test-results-wrap');
+    const actionsWrap = document.getElementById('lab-prob-actions-wrap');
+    const ioSection = document.getElementById('lab-prob-io-section');
+    const footerEl = document.getElementById('lab-prob-footer');
 
     if (resultsWrap) resultsWrap.style.display = 'none';
 
     if (!q) {
-      if (titleEl) titleEl.textContent = 'Free Practice Mode';
-      if (descEl) descEl.textContent = 'No specific coding questions uploaded by Admin for your batch yet. You can write, execute, and test any program in Python, C, C++, Java, or JavaScript.';
-      if (marksEl) marksEl.textContent = 'Practice';
+      if (titleEl) titleEl.textContent = 'Free Code Playground';
+      if (descEl) descEl.textContent = 'Write, compile, and execute code freely in Python, C, C++, Java, or JavaScript. When faculty staff assigns a coding question to your batch, select it from the dropdown above to view problem statements and submit solutions.';
+      if (marksEl) marksEl.textContent = 'Playground';
       if (sampleInEl) sampleInEl.textContent = '(none)';
       if (expOutEl) expOutEl.textContent = '(none)';
-      if (facultyEl) facultyEl.textContent = '👨‍🏫 Staff: Faculty';
+      if (facultyEl) facultyEl.textContent = '👨‍🏫 Staff: Free Coding';
+      if (actionsWrap) actionsWrap.style.display = 'none';
+      if (ioSection) ioSection.style.display = 'none';
+      if (footerEl) footerEl.style.display = 'none';
       return;
     }
+
+    if (actionsWrap) actionsWrap.style.display = 'flex';
+    if (ioSection) ioSection.style.display = 'block';
+    if (footerEl) footerEl.style.display = 'grid';
 
     const problemTitle = q.title || (q.text ? q.text.split('\n')[0].replace(/^#*\s*/, '') : 'Coding Challenge');
     const facultyName = q.createdByName || storage.getAdminDisplayName(q.createdBy, 'Faculty Staff');
     if (titleEl) titleEl.textContent = problemTitle;
     if (descEl) descEl.textContent = q.text || q.question || 'Solve the programming challenge.';
     if (marksEl) marksEl.textContent = `${q.marks || 10} Marks`;
-    if (yearEl) yearEl.textContent = `${q.year || this.currentStudent.year}`;
+    if (yearEl) yearEl.textContent = `${q.year || this.currentStudent?.year || '1st Year'}`;
     if (langEl) langEl.textContent = (q.language || 'python').toUpperCase();
     if (topicEl) topicEl.textContent = q.chapter || 'Practical Lab';
     if (facultyEl) facultyEl.textContent = `👨‍🏫 Staff: ${facultyName}`;
@@ -1192,7 +1230,7 @@ class StudentDashboardController {
     }
   }
 
-  selectLabLanguage(langKey, label, ver, icon, e) {
+  selectLabLanguage(langKey, label, ver, icon, e = null, isSilent = false) {
     if (e) {
       e.stopPropagation();
     }
@@ -1220,7 +1258,7 @@ class StudentDashboardController {
     }
     if (btn) btn.classList.remove('active');
 
-    this.onLabLanguageChange(langKey);
+    this.onLabLanguageChange(langKey, isSilent);
   }
 
   updateCursorPosition(textarea) {
@@ -1234,7 +1272,7 @@ class StudentDashboardController {
     posEl.textContent = `Ln ${lineNum}, Col ${colNum}`;
   }
 
-  onLabLanguageChange(newLang) {
+  onLabLanguageChange(newLang, isSilent = false) {
     const editor = document.getElementById('lab-coding-editor');
     if (editor) {
       this.syncLabLineNumbers(editor);
@@ -1242,7 +1280,9 @@ class StudentDashboardController {
       this.updateCursorPosition(editor);
     }
     this.updateLabFileTabInfo(newLang);
-    ui.showToast(`Switched Studio to ${newLang.toUpperCase()}`, 'info');
+    if (!isSilent) {
+      ui.showToast(`Switched Studio to ${newLang.toUpperCase()}`, 'info');
+    }
   }
 
   toggleLabStdin() {

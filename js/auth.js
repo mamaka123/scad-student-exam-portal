@@ -7,20 +7,32 @@ class AuthService {
     this.currentSession = storage.getActiveSession();
   }
 
-  /* Existing Student Login (Login with Register Number only) */
-  loginExistingStudent(regNo) {
+  /* Existing Student Login (Login with Register Number only) - ALWAYS retrieves latest record from Database */
+  async loginExistingStudent(regNo) {
     const cleanRegNo = (regNo || '').toString().trim();
     if (!cleanRegNo) throw new Error("Please enter your Register Number.");
     if (!/^9528\d{8}$/.test(cleanRegNo)) {
       throw new Error("Register Number must be a 12-digit number starting with 9528 (e.g., 952821104001).");
     }
 
-    const student = (window.storage && typeof storage.getStudentByRegNo === 'function')
-      ? storage.getStudentByRegNo(cleanRegNo)
-      : storage.getStudents().find(s => s.regNo && s.regNo.toString().trim() === cleanRegNo);
+    // Always query database first to retrieve latest data and verify student
+    let student = null;
+    if (window.storage && typeof storage.getStudentByRegNoFromDb === 'function') {
+      try {
+        student = await storage.getStudentByRegNoFromDb(cleanRegNo);
+      } catch (dbErr) {
+        console.warn("Live database check failed, using local storage fallback:", dbErr);
+      }
+    }
 
     if (!student) {
-      throw new Error(`Register Number ${cleanRegNo} not found in student records. If you are a new student, please register first.`);
+      student = (window.storage && typeof storage.getStudentByRegNo === 'function')
+        ? storage.getStudentByRegNo(cleanRegNo)
+        : storage.getStudents().find(s => s.regNo && s.regNo.toString().trim() === cleanRegNo);
+    }
+
+    if (!student) {
+      throw new Error(`Register Number ${cleanRegNo} not found in student database. If you are a new student, please register first.`);
     }
 
     const session = {
@@ -34,8 +46,8 @@ class AuthService {
     return session;
   }
 
-  /* New Student Registration (First-Time Signup) */
-  registerStudent(name, regNo, year, section) {
+  /* New Student Registration (First-Time Signup) - Saves directly to Database */
+  async registerStudent(name, regNo, year, section) {
     if (!name || !name.trim()) throw new Error("Please enter your Full Name.");
     
     const cleanRegNo = (regNo || '').toString().trim();
@@ -47,15 +59,23 @@ class AuthService {
     if (!year) throw new Error("Please select your Academic Year.");
     if (!section) throw new Error("Please select your Section.");
 
-    const existing = (window.storage && typeof storage.getStudentByRegNo === 'function')
-      ? storage.getStudentByRegNo(cleanRegNo)
-      : storage.getStudents().find(s => s.regNo && s.regNo.toString().trim() === cleanRegNo);
+    // Check if already registered in Database or LocalStorage
+    let existing = null;
+    if (window.storage && typeof storage.getStudentByRegNoFromDb === 'function') {
+      existing = await storage.getStudentByRegNoFromDb(cleanRegNo);
+    } else if (window.storage && typeof storage.getStudentByRegNo === 'function') {
+      existing = storage.getStudentByRegNo(cleanRegNo);
+    }
 
     if (existing) {
       throw new Error(`Student with Register Number ${cleanRegNo} is already registered (${existing.name}). Please use 'Existing Student Login'.`);
     }
 
-    const newStudent = storage.addStudent({
+    const addFn = (window.storage && typeof storage.addStudentAsync === 'function')
+      ? storage.addStudentAsync.bind(storage)
+      : storage.addStudent.bind(storage);
+
+    const newStudent = await addFn({
       name: name.trim(),
       regNo: cleanRegNo,
       year: year,
@@ -74,22 +94,25 @@ class AuthService {
   }
 
   /* Unified Student Login Fallback */
-  loginStudent(name, regNo, year, section) {
+  async loginStudent(name, regNo, year, section) {
     const cleanRegNo = (regNo || '').toString().trim();
     if (!cleanRegNo) throw new Error("Please enter your Register Number.");
 
-    const existing = (window.storage && typeof storage.getStudentByRegNo === 'function')
-      ? storage.getStudentByRegNo(cleanRegNo)
-      : storage.getStudents().find(s => s.regNo && s.regNo.toString().trim() === cleanRegNo);
+    let existing = null;
+    if (window.storage && typeof storage.getStudentByRegNoFromDb === 'function') {
+      existing = await storage.getStudentByRegNoFromDb(cleanRegNo);
+    } else if (window.storage && typeof storage.getStudentByRegNo === 'function') {
+      existing = storage.getStudentByRegNo(cleanRegNo);
+    }
 
     // If student already exists and name/year/section were omitted, perform fast login
     if (existing && (!name || !year || !section)) {
-      return this.loginExistingStudent(cleanRegNo);
+      return await this.loginExistingStudent(cleanRegNo);
     }
 
     // If new student registering through combined form
     if (!existing) {
-      return this.registerStudent(name, cleanRegNo, year, section);
+      return await this.registerStudent(name, cleanRegNo, year, section);
     }
 
     // Existing student logging in with updated details

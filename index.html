@@ -4287,7 +4287,7 @@
               Write a program solving the requested problem...
             </div>
 
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <div id="lab-prob-actions-wrap" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button type="button" class="btn-prob-action" onclick="studentDashboard.loadAdminStarterCode()">
                 <svg class="svg-icon" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
                 Load Admin Starter Code
@@ -4298,18 +4298,20 @@
               </button>
             </div>
 
-            <div class="prob-io-box">
-              <div class="prob-io-title">
-                <span>Sample Input</span>
+            <div id="lab-prob-io-section">
+              <div class="prob-io-box">
+                <div class="prob-io-title">
+                  <span>Sample Input</span>
+                </div>
+                <pre class="prob-io-content" id="lab-prob-sample-input">(none)</pre>
               </div>
-              <pre class="prob-io-content" id="lab-prob-sample-input">(none)</pre>
-            </div>
 
-            <div class="prob-io-box">
-              <div class="prob-io-title">
-                <span>Expected Output</span>
+              <div class="prob-io-box" style="margin-top: 0.5rem;">
+                <div class="prob-io-title">
+                  <span>Expected Output</span>
+                </div>
+                <pre class="prob-io-content" id="lab-prob-expected-output">(none)</pre>
               </div>
-              <pre class="prob-io-content" id="lab-prob-expected-output">(none)</pre>
             </div>
 
             <div id="lab-test-results-wrap" style="display: none;">
@@ -4319,7 +4321,7 @@
               <div id="lab-test-cases-list"></div>
             </div>
 
-            <div class="prob-drawer-footer">
+            <div class="prob-drawer-footer" id="lab-prob-footer">
               <button type="button" class="btn btn-secondary btn-sm" onclick="studentDashboard.testLabTestCases()" title="Run code against admin test cases">
                 🧪 Test Cases
               </button>
@@ -4977,15 +4979,15 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
   <!-- JavaScript Bundle Files -->
-  <script src="js/config.js?v=45"></script>
-  <script src="js/storage.js?v=45"></script>
-  <script src="js/totp.js?v=45"></script>
-  <script src="js/auth.js?v=45"></script>
-  <script src="js/student.js?v=45"></script>
-  <script src="js/admin.js?v=45"></script>
-  <script src="js/super-admin.js?v=45"></script>
-  <script src="js/exam.js?v=45"></script>
-  <script src="js/app.js?v=45"></script>
+  <script src="js/config.js?v=46"></script>
+  <script src="js/storage.js?v=46"></script>
+  <script src="js/totp.js?v=46"></script>
+  <script src="js/auth.js?v=46"></script>
+  <script src="js/student.js?v=46"></script>
+  <script src="js/admin.js?v=46"></script>
+  <script src="js/super-admin.js?v=46"></script>
+  <script src="js/exam.js?v=46"></script>
+  <script src="js/app.js?v=46"></script>
 
 </body>
 

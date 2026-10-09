@@ -3056,7 +3056,7 @@
     align-items: center !important;
     justify-content: space-between !important;
     width: 100% !important;
-    gap: 0.35rem !important;
+    gap: 0.4rem !important;
     order: 1 !important;
     position: relative !important;
     z-index: 1001 !important;
@@ -3067,7 +3067,7 @@
     align-items: center !important;
     gap: 0.35rem !important;
     min-width: 0 !important;
-    flex-shrink: 1 !important;
+    flex: 1 1 auto !important;
     order: 1 !important;
     margin-right: 0 !important;
   }
@@ -3084,6 +3084,7 @@
   .ide-chrome-tools-row {
     display: flex !important;
     align-items: center !important;
+    justify-content: flex-start !important;
     gap: 0.35rem !important;
     width: 100% !important;
     order: 2 !important;
@@ -3092,7 +3093,7 @@
     overflow-x: auto !important;
     scrollbar-width: none !important;
     -webkit-overflow-scrolling: touch !important;
-    padding: 0.25rem 0 0 !important;
+    padding: 0.3rem 0 0 !important;
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
   }
 
@@ -3106,20 +3107,21 @@
 
   .ide-workspace-body {
     flex-direction: column !important;
+    height: calc(100% - 82px) !important;
   }
   .ide-workspace-body .ide-editor-section {
-    flex: 1 1 58% !important;
+    flex: 1 1 56% !important;
     height: auto !important;
-    min-height: 200px !important;
+    min-height: 180px !important;
     border-right: none !important;
     border-bottom: 1.5px solid var(--ide-border) !important;
   }
   .ide-workspace-body .ide-terminal-section {
-    flex: 0 0 42% !important;
+    flex: 0 0 44% !important;
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
-    min-height: 160px !important;
+    min-height: 150px !important;
     max-height: 48vh !important;
     border-left: none !important;
   }
@@ -3155,41 +3157,77 @@
   #btn-lab-maximize {
     display: none !important;
   }
+  #btn-lab-layout {
+    display: none !important;
+  }
+  .ide-window-dots {
+    display: none !important;
+  }
+  .ide-shortcut-badge {
+    display: none !important;
+  }
   .ide-tab-pill {
-    padding: 0.25rem 0.5rem !important;
+    padding: 0.24rem 0.45rem !important;
     font-size: 0.76rem !important;
+    border-radius: 6px !important;
+  }
+  #lab-file-tab-name,
+  .ide-tab-status {
+    display: none !important;
   }
   .ide-custom-dropdown-btn {
-    padding: 0.26rem 0.5rem !important;
+    padding: 0.26rem 0.45rem !important;
     font-size: 0.78rem !important;
-    gap: 0.35rem !important;
+    gap: 0.3rem !important;
+    height: 30px !important;
+    border-radius: 6px !important;
+  }
+  .ide-lang-selected-label {
+    max-width: 85px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ide-lang-version-pill {
+    display: none !important;
   }
   .ide-custom-dropdown-menu {
-    min-width: 260px !important;
-    max-width: 92vw !important;
+    min-width: 240px !important;
+    max-width: 90vw !important;
+    left: 0 !important;
+    right: auto !important;
   }
   .ide-tool-btn {
-    padding: 0.26rem 0.5rem !important;
+    padding: 0.25rem 0.48rem !important;
     font-size: 0.74rem !important;
     white-space: nowrap !important;
+    height: 28px !important;
+    border-radius: 6px !important;
   }
   .ide-btn-run {
     padding: 0.28rem 0.65rem !important;
-    font-size: 0.76rem !important;
+    font-size: 0.78rem !important;
     gap: 0.28rem !important;
     white-space: nowrap !important;
+    height: 30px !important;
+    border-radius: 6px !important;
+  }
+  .ide-icon-btn {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 6px !important;
   }
   .ide-line-gutter {
-    width: 38px !important;
-    padding: 10px 4px !important;
+    width: 36px !important;
+    padding: 8px 3px !important;
     font-size: 13px !important;
-    line-height: 22px !important;
+    line-height: 20px !important;
   }
   .ide-highlight-layer,
   .ide-textarea {
-    padding: 10px 8px !important;
+    padding: 8px 6px !important;
     font-size: 13px !important;
-    line-height: 22px !important;
+    line-height: 20px !important;
   }
   .ide-editor-statusbar {
     height: 24px !important;
@@ -3198,13 +3236,24 @@
     padding: 0 0.5rem !important;
   }
   .ide-terminal-toolbar {
-    height: 34px !important;
-    padding: 0 0.65rem !important;
+    height: 32px !important;
+    padding: 0 0.5rem !important;
+  }
+  .terminal-tab {
+    font-size: 0.72rem !important;
+  }
+  .compiler-status-indicator {
+    font-size: 0.7rem !important;
+    padding: 0.1rem 0.35rem !important;
+  }
+  .ide-terminal-mini-btn {
+    padding: 0.15rem 0.45rem !important;
+    font-size: 0.72rem !important;
   }
   .ide-terminal-viewport {
-    padding: 0.65rem 0.85rem !important;
-    font-size: 0.82rem !important;
-    line-height: 1.5 !important;
+    padding: 0.6rem 0.75rem !important;
+    font-size: 0.8rem !important;
+    line-height: 1.45 !important;
   }
   .ide-problem-drawer {
     width: 92vw !important;
@@ -3227,12 +3276,6 @@
 
 /* Small Smart Phones (<= 540px) */
 @media (max-width: 540px) {
-  #lab-file-tab-name {
-    display: none !important;
-  }
-  .ide-tab-pill {
-    padding: 0.25rem 0.4rem !important;
-  }
   #btn-lab-toggle-problem span:not(#lab-prob-dot) {
     display: none !important;
   }
@@ -3240,14 +3283,14 @@
     display: none !important;
   }
   .ide-custom-dropdown-menu {
-    left: -20px !important;
+    left: -10px !important;
   }
 }
 
 /* Extra Small Phones (<= 400px) */
 @media (max-width: 400px) {
   .ide-chrome-header {
-    padding: 0.35rem 0.4rem 0.3rem !important;
+    padding: 0.3rem 0.4rem 0.25rem !important;
     gap: 0.25rem !important;
   }
   .ide-lang-code-tag {
@@ -3255,5 +3298,8 @@
   }
   .ide-btn-run span:not(.svg-icon) {
     font-size: 0.74rem !important;
+  }
+  .ide-lang-selected-label {
+    max-width: 70px;
   }
 }

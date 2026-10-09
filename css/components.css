@@ -922,8 +922,13 @@
   }
 
   .toast-container {
-    bottom: max(0.85rem, env(safe-area-inset-bottom, 0.85rem));
-    width: 96vw;
+    top: max(0.65rem, env(safe-area-inset-top, 0.65rem)) !important;
+    bottom: auto !important;
+    flex-direction: column !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 92vw !important;
+    max-width: 400px !important;
   }
 
   .toast {

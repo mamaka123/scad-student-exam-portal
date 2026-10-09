@@ -545,7 +545,8 @@ window.switchStudentAuthMode = function(mode) {
   }
 };
 
-// Real-time student profile lookup as Register Number is typed
+// Real-time student profile lookup as Register Number is typed (checks Database live)
+let _lookupTimer = null;
 window.onStudentRegNoInput = function(val) {
   const clean = (val || '').toString().trim();
   const lookupCard = document.getElementById('student-lookup-card');
@@ -562,14 +563,15 @@ window.onStudentRegNoInput = function(val) {
     return;
   }
 
-  const student = (window.storage && typeof storage.getStudentByRegNo === 'function')
+  // 1. Fast local cache lookup
+  const localStudent = (window.storage && typeof storage.getStudentByRegNo === 'function')
     ? storage.getStudentByRegNo(clean)
     : (storage.getStudents().find(s => s.regNo && s.regNo.toString().trim() === clean));
 
-  if (student) {
-    if (nameEl) nameEl.textContent = student.name;
-    if (metaEl) metaEl.textContent = `${student.year} • Section ${student.section}`;
-    if (avatarEl) avatarEl.textContent = (student.name || 'S').charAt(0).toUpperCase();
+  if (localStudent) {
+    if (nameEl) nameEl.textContent = localStudent.name;
+    if (metaEl) metaEl.textContent = `${localStudent.year} • Section ${localStudent.section}`;
+    if (avatarEl) avatarEl.textContent = (localStudent.name || 'S').charAt(0).toUpperCase();
     if (lookupCard) lookupCard.style.display = 'block';
     if (notFoundAlert) notFoundAlert.style.display = 'none';
     if (statusIcon) {
@@ -577,15 +579,52 @@ window.onStudentRegNoInput = function(val) {
       statusIcon.innerHTML = '✅';
       statusIcon.title = 'Verified Registered Student';
     }
-  } else {
-    if (lookupCard) lookupCard.style.display = 'none';
-    if (notFoundAlert) notFoundAlert.style.display = 'block';
-    if (statusIcon) {
-      statusIcon.style.display = 'block';
-      statusIcon.innerHTML = '⚠️';
-      statusIcon.title = 'Not registered yet';
-    }
+    return;
   }
+
+  // 2. Query Database asynchronously
+  if (statusIcon) {
+    statusIcon.style.display = 'block';
+    statusIcon.innerHTML = '⏳';
+    statusIcon.title = 'Checking Database...';
+  }
+
+  clearTimeout(_lookupTimer);
+  _lookupTimer = setTimeout(async () => {
+    try {
+      const dbStudent = (window.storage && typeof storage.getStudentByRegNoFromDb === 'function')
+        ? await storage.getStudentByRegNoFromDb(clean)
+        : null;
+
+      if (dbStudent) {
+        if (nameEl) nameEl.textContent = dbStudent.name;
+        if (metaEl) metaEl.textContent = `${dbStudent.year} • Section ${dbStudent.section}`;
+        if (avatarEl) avatarEl.textContent = (dbStudent.name || 'S').charAt(0).toUpperCase();
+        if (lookupCard) lookupCard.style.display = 'block';
+        if (notFoundAlert) notFoundAlert.style.display = 'none';
+        if (statusIcon) {
+          statusIcon.style.display = 'block';
+          statusIcon.innerHTML = '✅';
+          statusIcon.title = 'Verified from Database';
+        }
+      } else {
+        if (lookupCard) lookupCard.style.display = 'none';
+        if (notFoundAlert) notFoundAlert.style.display = 'block';
+        if (statusIcon) {
+          statusIcon.style.display = 'block';
+          statusIcon.innerHTML = '⚠️';
+          statusIcon.title = 'Not registered yet';
+        }
+      }
+    } catch (e) {
+      if (lookupCard) lookupCard.style.display = 'none';
+      if (notFoundAlert) notFoundAlert.style.display = 'block';
+      if (statusIcon) {
+        statusIcon.style.display = 'block';
+        statusIcon.innerHTML = '⚠️';
+      }
+    }
+  }, 250);
 };
 
 // 1-Click Select Saved Student Profile
@@ -610,14 +649,26 @@ window.onStudentRegYearChange = function(year) {
   }
 };
 
-// Existing Student Fast Login
-function handleExistingStudentLogin(e) {
+// Existing Student Fast Login (Always retrieves and verifies against live Database)
+async function handleExistingStudentLogin(e) {
   if (e) e.preventDefault();
   const regInput = document.getElementById('student-login-reg');
   const regNo = regInput ? regInput.value.trim() : '';
+  if (!regNo) {
+    ui.showToast('Please enter your 12-digit Register Number.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-existing-student-login');
+  const origHtml = btn ? btn.innerHTML : 'Login to Dashboard';
 
   try {
-    const session = auth.loginExistingStudent(regNo);
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;margin-right:6px;vertical-align:middle;"></span> Verifying with Database...';
+    }
+
+    const session = await auth.loginExistingStudent(regNo);
     ui.showToast(`Welcome back, ${session.user.name}!`, 'success');
     ui.showView('student-dashboard-view');
     if (window.studentDashboard) {
@@ -625,40 +676,61 @@ function handleExistingStudentLogin(e) {
     }
   } catch (err) {
     ui.showToast(err.message, 'error');
-    window.onStudentRegNoInput(regNo);
+    if (window.onStudentRegNoInput) {
+      window.onStudentRegNoInput(regNo);
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
   }
 }
 window.handleExistingStudentLogin = handleExistingStudentLogin;
 
-// New Student Registration
-function handleNewStudentRegister(e) {
+// New Student Registration (Saves directly to Database and renders on Admin page)
+async function handleNewStudentRegister(e) {
   if (e) e.preventDefault();
   const name = document.getElementById('student-reg-name').value.trim();
   const regNo = document.getElementById('student-reg-reg').value.trim();
   const year = document.getElementById('student-reg-year').value;
   const section = document.getElementById('student-reg-section').value;
 
+  const form = document.getElementById('student-register-form');
+  const btn = form ? form.querySelector('button[type="submit"]') : null;
+  const origHtml = btn ? btn.innerHTML : 'Register & Go to Dashboard';
+
   try {
-    const session = auth.registerStudent(name, regNo, year, section);
-    ui.showToast(`Account registered! Welcome, ${name}!`, 'success');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;margin-right:6px;vertical-align:middle;"></span> Saving to Database...';
+    }
+
+    const session = await auth.registerStudent(name, regNo, year, section);
+    ui.showToast(`Account registered in Database! Welcome, ${name}!`, 'success');
     ui.showView('student-dashboard-view');
     if (window.studentDashboard) {
       studentDashboard.renderDashboard();
     }
   } catch (err) {
     ui.showToast(err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
   }
 }
 window.handleNewStudentRegister = handleNewStudentRegister;
 
 // Fallback unified handler
-function handleStudentLogin(e) {
+async function handleStudentLogin(e) {
   if (e) e.preventDefault();
   const regInput = document.getElementById('student-login-reg');
   if (regInput && regInput.value) {
-    return handleExistingStudentLogin(e);
+    return await handleExistingStudentLogin(e);
   }
-  return handleNewStudentRegister(e);
+  return await handleNewStudentRegister(e);
 }
 window.handleStudentLogin = handleStudentLogin;
 

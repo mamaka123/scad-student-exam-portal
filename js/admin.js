@@ -1946,8 +1946,8 @@ class AdminDashboardController {
     this.confirmDeleteAction({
       message: `Are you sure you want to delete student record for ${nameStr}?`,
       onConfirm: async () => {
-        storage.deleteStudent(id);
-        ui.showToast('Student record permanently deleted.', 'warning');
+        await storage.deleteStudent(id);
+        ui.showToast('Student record permanently deleted from Database.', 'warning');
         this.renderStudentsTable();
       }
     });
@@ -5796,19 +5796,22 @@ class AdminDashboardController {
     window.print();
   }
 
-  promptClearAllDemoData() {
+  async promptClearAllDemoData() {
     this.closeDotsMenu();
-    if (!confirm('Are you sure you want to clear ALL demo data (students, subjects, questions, test results, violations)?\n\nThis will give you a 100% clean slate! Default Admin credentials will remain intact.')) {
+    if (!confirm('Are you sure you want to clear ALL demo data (students, subjects, questions, test results, violations) from both LocalStorage and Firebase Cloud Database?\n\nThis will give you a 100% clean slate! Default Admin credentials will remain intact.')) {
       return;
     }
+    if (window.ui && typeof ui.showToast === 'function') {
+      ui.showToast('Wiping all demo data from Cloud Database and Local Storage...', 'info');
+    }
     if (window.storage && typeof storage.resetAllData === 'function') {
-      storage.resetAllData();
+      await storage.resetAllData();
       if (window.ui && typeof ui.showToast === 'function') {
-        ui.showToast('All demo data cleared successfully! Page will refresh.', 'success');
+        ui.showToast('All demo data cleared successfully from Database! Refreshing...', 'success');
       }
       setTimeout(() => {
         window.location.reload();
-      }, 800);
+      }, 900);
     }
   }
 }

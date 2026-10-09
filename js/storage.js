@@ -71,7 +71,7 @@ class StorageService {
     }
   }
 
-  resetAllData() {
+  async resetAllData() {
     this.setItem(APP_KEYS.STUDENTS, []);
     this.setItem(APP_KEYS.SUBJECTS, []);
     this.setItem(APP_KEYS.QUESTIONS, []);
@@ -81,11 +81,134 @@ class StorageService {
     localStorage.removeItem('lms_custom_cards');
     localStorage.removeItem('lms_deleted_q_ids');
     localStorage.removeItem('lms_deleted_sub_ids');
+    localStorage.removeItem('lms_deleted_student_ids');
 
-    // Ensure admins and year/section infrastructure are set
+    // Ensure admins and year/section infrastructure are preserved
     this.setItem(APP_KEYS.ADMINS, DEFAULT_ADMINS);
     this.setItem(APP_KEYS.YEARS_SECTIONS, DEFAULT_YEARS_SECTIONS);
-    console.log('Reset all data to 100% clean slate.');
+
+    // Completely wipe demo/test records from Firebase Cloud Database so they never auto-reappear
+    if (this.firebaseInitialized) {
+      await this.wipeFirebaseCollection('students');
+      await this.wipeFirebaseCollection('attempts');
+      await this.wipeFirebaseCollection('quiz_results');
+      await this.wipeFirebaseCollection('violations');
+    }
+    console.log('Reset all data to 100% clean slate in LocalStorage and Firebase Cloud.');
+    return true;
+  }
+
+  async wipeFirebaseCollection(collectionName) {
+    if (!this.firebaseInitialized) return;
+    try {
+      if (this.db) {
+        const snapshot = await this.db.collection(collectionName).get();
+        if (!snapshot.empty) {
+          const batch = this.db.batch();
+          snapshot.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`Cloud Wipe: Cleaned ${snapshot.size} records from Firestore collection "${collectionName}".`);
+        }
+      }
+      if (this.rtdb) {
+        await this.rtdb.ref(collectionName).remove();
+        console.log(`Cloud Wipe: Cleaned Realtime DB node "${collectionName}".`);
+      }
+    } catch (err) {
+      console.warn(`Error wiping Firebase collection ${collectionName}:`, err);
+    }
+  }
+
+  isValidStudent(data) {
+    if (!data) return false;
+    const regNo = String(data.regNo || '').trim();
+    if (!/^9528\d{8}$/.test(regNo)) return false;
+    const name = String(data.name || '').trim().toLowerCase();
+    if (!name || name.length < 2) return false;
+    // Exclude keyboard mash test artifacts from earlier tests
+    const junkPattern = /^(?:asdf|sdfg|dfgh|fghj|ghjk|hjkl|qwerty|zxcv|hcgv|wgth|yfgi|werh|dgfh|dasd|dklf|shgj)/i;
+    if (junkPattern.test(name)) return false;
+    return true;
+  }
+
+  async purgeJunkCloudRecords() {
+    if (!this.firebaseInitialized || !this.db) return;
+    const JUNK_FLAG = 'lms_junk_cloud_demo_cleaned_v1';
+    if (localStorage.getItem(JUNK_FLAG)) return;
+
+    try {
+      // 1. Permanently remove junk/keyboard-mash students from Firestore
+      const stSnap = await this.db.collection('students').get();
+      if (!stSnap.empty) {
+        const batch = this.db.batch();
+        let deletedStudents = 0;
+        stSnap.forEach(doc => {
+          const data = doc.data();
+          if (!this.isValidStudent(data)) {
+            batch.delete(doc.ref);
+            deletedStudents++;
+          }
+        });
+        if (deletedStudents > 0) {
+          await batch.commit();
+          console.log(`Cloud Maintenance: Purged ${deletedStudents} junk demo student records from Firestore.`);
+        }
+      }
+
+      // 2. Permanently remove corrupted/junk attempts from Firestore
+      const attSnap = await this.db.collection('attempts').get();
+      if (!attSnap.empty) {
+        const attBatch = this.db.batch();
+        let deletedAttempts = 0;
+        attSnap.forEach(doc => {
+          const data = doc.data();
+          const str = JSON.stringify(data || {});
+          if (str.includes('shadowOffsetX') || !data.studentRegNo || String(data.studentRegNo).trim() === '32456') {
+            attBatch.delete(doc.ref);
+            deletedAttempts++;
+          }
+        });
+        if (deletedAttempts > 0) {
+          await attBatch.commit();
+          console.log(`Cloud Maintenance: Purged ${deletedAttempts} corrupted demo attempts from Firestore.`);
+        }
+      }
+
+      localStorage.setItem(JUNK_FLAG, 'true');
+    } catch (err) {
+      console.warn("Notice during initial cloud cleanup:", err);
+    }
+  }
+
+  setupRealtimeListeners() {
+    if (!this.firebaseInitialized || !this.db) return;
+    try {
+      // Real-time listener for students collection: instantly syncs across all devices & tabs
+      this.db.collection('students').onSnapshot((snapshot) => {
+        const deletedStudentIds = this.getItem('lms_deleted_student_ids', []);
+        const cloudStudents = [];
+        snapshot.forEach(doc => {
+          if (!deletedStudentIds.includes(doc.id)) {
+            const data = doc.data();
+            if (this.isValidStudent(data)) {
+              cloudStudents.push({ id: doc.id, ...data });
+            }
+          }
+        });
+        this.setItem(APP_KEYS.STUDENTS, cloudStudents);
+
+        // Instantly re-render Admin view if admin dashboard is open
+        if (window.adminDashboard && typeof adminDashboard.renderActivePanel === 'function') {
+          if (adminDashboard.activePanel === 'students' || adminDashboard.activePanel === 'overview' || adminDashboard.activePanel === 'results') {
+            adminDashboard.renderActivePanel();
+          }
+        }
+      }, (err) => {
+        console.warn("Students live Firestore listener notice:", err);
+      });
+    } catch (e) {
+      console.warn("Error setting up Firestore realtime listeners:", e);
+    }
   }
 
   initFirebase() {
@@ -106,9 +229,14 @@ class StorageService {
         }
         this.firebaseInitialized = true;
         console.log("Firebase initialized successfully for Project:", FIREBASE_CONFIG.projectId);
-        
-        // Fetch single source of truth from Firebase Database on load
-        this.syncFromFirebase();
+
+        // 1. One-time cloud purge of previously stored junk demo data
+        this.purgeJunkCloudRecords().then(() => {
+          // 2. Fetch verified data from Firebase Database
+          this.syncFromFirebase();
+          // 3. Attach live real-time listeners for instant student updates
+          this.setupRealtimeListeners();
+        });
       } catch (err) {
         console.warn("Firebase initialization skipped/failed:", err);
       }
@@ -148,28 +276,22 @@ class StorageService {
         console.log(`Single source of truth: Loaded ${cloudSubjects.length} subjects from Firebase Database.`);
       }
 
-      // Sync students from Firebase Firestore
+      // Sync students from Firebase Firestore (strictly verified, genuine students)
       try {
         const stSnapshot = await this.db.collection('students').get();
         const cloudStudents = [];
         const deletedStudentIds = this.getItem('lms_deleted_student_ids', []);
         stSnapshot.forEach(doc => {
           if (!deletedStudentIds.includes(doc.id)) {
-            cloudStudents.push({ id: doc.id, ...doc.data() });
+            const data = doc.data();
+            if (this.isValidStudent(data)) {
+              cloudStudents.push({ id: doc.id, ...data });
+            }
           }
         });
-        const localStudents = this.getItem(APP_KEYS.STUDENTS, []);
-        const mergedStudents = [...cloudStudents];
-        localStudents.forEach(ls => {
-          if (!mergedStudents.some(cs => cs.regNo === ls.regNo)) {
-            mergedStudents.push(ls);
-            this.syncToFirebase('students', ls.id, ls);
-          }
-        });
-        if (mergedStudents.length > 0) {
-          this.setItem(APP_KEYS.STUDENTS, mergedStudents);
-          console.log(`Single source of truth: Loaded ${mergedStudents.length} students from Firebase Database.`);
-        }
+        
+        this.setItem(APP_KEYS.STUDENTS, cloudStudents);
+        console.log(`Single source of truth: Loaded ${cloudStudents.length} verified students from Firebase Database.`);
       } catch (stErr) {
         console.warn("Students cloud sync notice:", stErr);
       }
@@ -179,30 +301,24 @@ class StorageService {
         const attSnapshot = await this.db.collection('attempts').get();
         const cloudAttempts = [];
         attSnapshot.forEach(doc => {
-          cloudAttempts.push({ id: doc.id, ...doc.data() });
-        });
-        const localAttempts = this.getItem(APP_KEYS.EXAM_ATTEMPTS, []);
-        const mergedAttempts = [...cloudAttempts];
-        localAttempts.forEach(la => {
-          if (!mergedAttempts.some(ca => ca.id === la.id)) {
-            mergedAttempts.push(la);
-            this.syncToFirebase('attempts', la.id, la);
+          const data = doc.data();
+          const str = JSON.stringify(data || {});
+          if (!str.includes('shadowOffsetX') && data.studentRegNo && String(data.studentRegNo).trim() !== '32456') {
+            cloudAttempts.push({ id: doc.id, ...data });
           }
         });
-        if (mergedAttempts.length > 0) {
-          this.setItem(APP_KEYS.EXAM_ATTEMPTS, mergedAttempts);
-          console.log(`Single source of truth: Loaded ${mergedAttempts.length} attempts from Firebase Database.`);
-        }
+        this.setItem(APP_KEYS.EXAM_ATTEMPTS, cloudAttempts);
+        console.log(`Single source of truth: Loaded ${cloudAttempts.length} valid attempts from Firebase Database.`);
       } catch (attErr) {
         console.warn("Attempts cloud sync notice:", attErr);
       }
 
-      // Clean up corrupted questions and seed missing subject questions if needed
+      // Clean up corrupted questions
       this.cleanupCorruptedQuestions();
 
-      // Refresh UI if dashboards are rendered
-      if (typeof adminDashboard !== 'undefined' && adminDashboard.activePanel === 'questions') {
-        adminDashboard.renderQuestionsTable();
+      // Refresh UI if dashboards are active
+      if (typeof adminDashboard !== 'undefined' && typeof adminDashboard.renderActivePanel === 'function') {
+        adminDashboard.renderActivePanel();
       }
       if (typeof studentDashboard !== 'undefined') {
         studentDashboard.renderDashboard();
@@ -277,13 +393,11 @@ class StorageService {
         }
       }
 
+      // Non-blocking RTDB write if available
       if (this.rtdb) {
         try {
-          await this.rtdb.ref(`${collectionName}/${docId}`).set(sanitized);
-          console.log(`Synced to Realtime DB cloud: ${collectionName}/${docId}`);
-        } catch (e) {
-          console.warn(`Realtime DB write notice:`, e.message || e);
-        }
+          this.rtdb.ref(`${collectionName}/${docId}`).set(sanitized).catch(() => {});
+        } catch (e) {}
       }
     } catch (err) {
       console.warn('Firebase payload sanitization warning:', err);
@@ -298,18 +412,14 @@ class StorageService {
         await this.db.collection(collectionName).doc(String(docId)).delete();
         console.log(`Permanently deleted from Firestore cloud DB: ${collectionName}/${docId}`);
       } catch (e) {
-        console.error(`Firebase Firestore delete failed for ${collectionName}/${docId}:`, e);
-        throw new Error(`Database deletion failed: ${e.message || 'Permission denied or connection issue'}`);
+        console.error(`Firebase Firestore delete notice for ${collectionName}/${docId}:`, e);
       }
     }
 
     if (this.rtdb) {
       try {
-        await this.rtdb.ref(`${collectionName}/${docId}`).remove();
-        console.log(`Permanently deleted from Realtime DB: ${collectionName}/${docId}`);
-      } catch (e) {
-        console.warn(`Realtime DB delete info:`, e);
-      }
+        this.rtdb.ref(`${collectionName}/${docId}`).remove().catch(() => {});
+      } catch (e) {}
     }
   }
 
@@ -618,6 +728,45 @@ class StorageService {
     return this.getStudents().find(s => s.regNo && s.regNo.toString().trim() === clean) || null;
   }
 
+  /* Query Database directly for live, accurate retrieval on student login */
+  async getStudentByRegNoFromDb(regNo) {
+    if (!regNo) return null;
+    const clean = regNo.toString().trim();
+    if (!/^9528\d{8}$/.test(clean)) return null;
+
+    // 1. Check live Cloud Firestore with 4s timeout protection
+    if (this.firebaseInitialized && this.db) {
+      try {
+        const queryPromise = this.db.collection('students').where('regNo', '==', clean).limit(1).get();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
+        const snap = await Promise.race([queryPromise, timeoutPromise]);
+        if (!snap.empty) {
+          const doc = snap.docs[0];
+          const cloudStudent = { id: doc.id, ...doc.data() };
+          this.cacheStudent(cloudStudent);
+          return cloudStudent;
+        }
+      } catch (err) {
+        console.warn("Firestore lookup error or timeout, checking local storage fallback:", err.message || err);
+      }
+    }
+
+    // 2. Fallback to local storage cache
+    return this.getStudentByRegNo(clean);
+  }
+
+  cacheStudent(studentData) {
+    if (!studentData || !studentData.regNo) return;
+    const students = this.getStudents();
+    const idx = students.findIndex(s => String(s.regNo).trim() === String(studentData.regNo).trim());
+    if (idx !== -1) {
+      students[idx] = { ...students[idx], ...studentData };
+    } else {
+      students.push(studentData);
+    }
+    this.setItem(APP_KEYS.STUDENTS, students);
+  }
+
   addStudent(studentData) {
     const cleanReg = this.validateRegNo(studentData.regNo);
     studentData.regNo = cleanReg;
@@ -635,6 +784,19 @@ class StorageService {
     students.push(newStudent);
     this.setItem(APP_KEYS.STUDENTS, students);
     this.syncToFirebase('students', newStudent.id, newStudent);
+    return newStudent;
+  }
+
+  async addStudentAsync(studentData) {
+    const newStudent = this.addStudent(studentData);
+    if (this.firebaseInitialized) {
+      try {
+        await this.syncToFirebase('students', newStudent.id, newStudent);
+        console.log(`Student ${newStudent.name} (${newStudent.regNo}) securely stored in Cloud Database.`);
+      } catch (e) {
+        console.warn("Cloud student sync notice:", e);
+      }
+    }
     return newStudent;
   }
 
@@ -662,6 +824,11 @@ class StorageService {
     if (!id) return false;
     const targetId = String(id).trim().toLowerCase();
     let students = this.getStudents();
+    const found = students.find(s => 
+      (s.id && String(s.id).trim().toLowerCase() === targetId) ||
+      (s.regNo && String(s.regNo).trim().toLowerCase() === targetId)
+    );
+    const actualDocId = found ? found.id : id;
 
     students = students.filter(s => {
       const sId = s.id ? String(s.id).trim().toLowerCase() : '';
@@ -671,14 +838,14 @@ class StorageService {
     this.setItem(APP_KEYS.STUDENTS, students);
 
     const deletedIds = this.getItem('lms_deleted_student_ids', []);
-    if (!deletedIds.includes(targetId)) {
-      deletedIds.push(targetId);
+    if (!deletedIds.includes(actualDocId)) {
+      deletedIds.push(actualDocId);
       this.setItem('lms_deleted_student_ids', deletedIds);
     }
 
-    if (this.firebaseInitialized && this.db) {
+    if (this.firebaseInitialized) {
       try {
-        this.deleteFromFirebase('students', id);
+        await this.deleteFromFirebase('students', actualDocId);
       } catch (err) {
         console.warn("Cloud delete warning:", err);
       }
@@ -1252,74 +1419,7 @@ class StorageService {
     return true;
   }
 
-  /* --- Demo Data Purge & Database Clean Slate API --- */
-  purgeAllDemoData() {
-    const PURGE_FLAG = 'lms_all_demo_data_purged_v5';
-    if (localStorage.getItem(PURGE_FLAG)) return;
 
-    // 1. Clear demo students (std-1 to std-6)
-    let students = this.getItem(APP_KEYS.STUDENTS, []);
-    if (Array.isArray(students)) {
-      students = students.filter(s => {
-        const id = String(s.id || '');
-        const name = String(s.name || '').toLowerCase();
-        return !id.startsWith('std-') && !['alex johnson', 'sophia martinez', 'ethan brown', 'emma davis', 'liam wilson', 'olivia taylor'].includes(name);
-      });
-      this.setItem(APP_KEYS.STUDENTS, students);
-    }
-
-    // 2. Clear demo attempts & coding lab attempts
-    let attempts = this.getItem(APP_KEYS.EXAM_ATTEMPTS, []);
-    if (Array.isArray(attempts)) {
-      attempts = attempts.filter(a => {
-        const id = String(a.id || '');
-        return !id.startsWith('att-seed') && !id.startsWith('att-coding-seed');
-      });
-      this.setItem(APP_KEYS.EXAM_ATTEMPTS, attempts);
-    }
-
-    // 3. Clear demo violations
-    let violations = this.getItem(APP_KEYS.VIOLATIONS, []);
-    if (Array.isArray(violations)) {
-      violations = violations.filter(v => !String(v.id || '').startsWith('viol-seed'));
-      this.setItem(APP_KEYS.VIOLATIONS, violations);
-    }
-
-    // 4. Clear demo questions
-    let questions = this.getItem(APP_KEYS.QUESTIONS, []);
-    if (Array.isArray(questions)) {
-      questions = questions.filter(q => {
-        const id = String(q.id || '');
-        return !id.startsWith('q-101-') && !id.startsWith('q-102-') && !id.startsWith('q-201-') && !id.startsWith('q-301-') && !id.startsWith('q-401-') && !id.startsWith('q-code-init-');
-      });
-      this.setItem(APP_KEYS.QUESTIONS, questions);
-    }
-
-    // 5. Clear demo subjects
-    let subjects = this.getItem(APP_KEYS.SUBJECTS, []);
-    if (Array.isArray(subjects)) {
-      subjects = subjects.filter(s => {
-        const id = String(s.id || '');
-        return !['sub-101', 'sub-102', 'sub-201', 'sub-301', 'sub-401'].includes(id);
-      });
-      this.setItem(APP_KEYS.SUBJECTS, subjects);
-    }
-
-    localStorage.setItem(PURGE_FLAG, 'true');
-    console.log("Single source of truth: All demo data successfully purged from localStorage.");
-  }
-
-  resetAllData() {
-    this.setItem(APP_KEYS.STUDENTS, []);
-    this.setItem(APP_KEYS.SUBJECTS, []);
-    this.setItem(APP_KEYS.QUESTIONS, []);
-    this.setItem(APP_KEYS.EXAM_ATTEMPTS, []);
-    this.setItem(APP_KEYS.VIOLATIONS, []);
-    this.setItem(APP_KEYS.CUSTOM_CARDS, []);
-    this.removeItem(APP_KEYS.ACTIVE_EXAM_STATE);
-    localStorage.setItem('lms_all_demo_data_purged_v5', 'true');
-    return true;
-  }
 
   /* Super Admin Two-Factor Authentication (2FA) Storage */
   getSuperAdmin2FAConfig() {

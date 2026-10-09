@@ -232,59 +232,79 @@
 
   class SuperAdmin2FAController {
     constructor() {
-      this.currentSecret = '';
+      this.currentSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26';
       this.timerInterval = null;
       this.mode = 'verify'; // 'setup' or 'verify'
     }
 
-    init(isFresher) {
+    init(forceSetup = false) {
       this.clearInterval();
+      const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined')
+        ? DEFAULT_SUPER_ADMIN_2FA_SECRET
+        : 'SCADKASIVISHAL26';
       const cfg = window.storage && typeof storage.getSuperAdmin2FAConfig === 'function'
         ? storage.getSuperAdmin2FAConfig()
         : null;
 
+      this.currentSecret = (cfg && cfg.secret) ? cfg.secret : defaultSecret;
+
+      if (forceSetup) {
+        this.showSetupCard(false);
+      } else {
+        this.showVerifyCard();
+      }
+    }
+
+    showVerifyCard() {
+      this.mode = 'verify';
       const setupCard = document.getElementById('super-2fa-setup-card');
       const verifyCard = document.getElementById('super-2fa-verify-card');
+      if (setupCard) setupCard.style.display = 'none';
+      if (verifyCard) verifyCard.style.display = 'block';
 
-      if (isFresher || !cfg || !cfg.secret) {
-        this.mode = 'setup';
-        // Generate new secret for fresher setup
+      this.startTimer();
+
+      const input = document.getElementById('super-2fa-verify-input');
+      if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 250);
+      }
+    }
+
+    showSetupCard(regenerate = false) {
+      this.mode = 'setup';
+      this.clearInterval();
+
+      if (regenerate) {
         this.currentSecret = totpService.generateSecret(16);
-        if (setupCard) setupCard.style.display = 'block';
-        if (verifyCard) verifyCard.style.display = 'none';
+      } else if (!this.currentSecret) {
+        const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26';
+        this.currentSecret = defaultSecret;
+      }
 
-        // Render Secret Text
-        const secretEl = document.getElementById('super-2fa-secret-text');
-        if (secretEl) secretEl.textContent = totpService.formatSecret(this.currentSecret);
+      const setupCard = document.getElementById('super-2fa-setup-card');
+      const verifyCard = document.getElementById('super-2fa-verify-card');
+      if (setupCard) setupCard.style.display = 'block';
+      if (verifyCard) verifyCard.style.display = 'none';
 
-        // Render QR Code Image
-        const otpAuthUrl = totpService.getOtpAuthUrl(this.currentSecret, 'kasivishal', 'SCAD-LMS');
-        const qrImg = document.getElementById('super-2fa-qr-img');
-        if (qrImg) {
-          qrImg.src = totpService.getQrCodeUrl(otpAuthUrl);
-          qrImg.onerror = () => {
-            qrImg.src = totpService.getFallbackQrUrl(otpAuthUrl);
-          };
-        }
+      // Render Secret Text
+      const secretEl = document.getElementById('super-2fa-secret-text');
+      if (secretEl) secretEl.textContent = totpService.formatSecret(this.currentSecret);
 
-        const input = document.getElementById('super-2fa-setup-input');
-        if (input) {
-          input.value = '';
-          setTimeout(() => input.focus(), 250);
-        }
-      } else {
-        this.mode = 'verify';
-        this.currentSecret = cfg.secret;
-        if (setupCard) setupCard.style.display = 'none';
-        if (verifyCard) verifyCard.style.display = 'block';
+      // Render QR Code Image
+      const otpAuthUrl = totpService.getOtpAuthUrl(this.currentSecret, 'kasivishal', 'SCAD-LMS');
+      const qrImg = document.getElementById('super-2fa-qr-img');
+      if (qrImg) {
+        qrImg.src = totpService.getQrCodeUrl(otpAuthUrl);
+        qrImg.onerror = () => {
+          qrImg.src = totpService.getFallbackQrUrl(otpAuthUrl);
+        };
+      }
 
-        this.startTimer();
-
-        const input = document.getElementById('super-2fa-verify-input');
-        if (input) {
-          input.value = '';
-          setTimeout(() => input.focus(), 250);
-        }
+      const input = document.getElementById('super-2fa-setup-input');
+      if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 250);
       }
     }
 
@@ -339,7 +359,7 @@
         if (window.ui) {
           window.ui.showToast(err.message, 'error');
         } else {
-          alert(err.message);
+          console.error(err.message);
         }
         if (input) {
           input.classList.add('input-shake');
@@ -380,12 +400,7 @@
     }
 
     reconfigure() {
-      if (confirm('Are you sure you want to re-setup 2FA? You will need to scan a new QR code on your Authenticator app.')) {
-        if (window.storage && typeof storage.resetSuperAdmin2FAConfig === 'function') {
-          storage.resetSuperAdmin2FAConfig();
-        }
-        this.init(true);
-      }
+      this.showSetupCard(false);
     }
 
     cancel() {

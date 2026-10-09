@@ -43,7 +43,7 @@ class StorageService {
   }
 
   purgeAllDemoData() {
-    const purgeFlagKey = 'lms_fresh_start_wipe_v10';
+    const purgeFlagKey = 'lms_fresh_start_wipe_v20';
     if (localStorage.getItem(purgeFlagKey)) {
       return;
     }
@@ -59,13 +59,23 @@ class StorageService {
       localStorage.removeItem('lms_deleted_q_ids');
       localStorage.removeItem('lms_deleted_sub_ids');
       localStorage.removeItem('lms_deleted_student_ids');
+      localStorage.removeItem('lms_recent_students');
 
-      // Ensure admins and year/section infrastructure are set
+      // Ensure ONLY Super Admin Kasivishal exists (remove all demo staff/admins)
       this.setItem(APP_KEYS.ADMINS, DEFAULT_ADMINS);
       this.setItem(APP_KEYS.YEARS_SECTIONS, DEFAULT_YEARS_SECTIONS);
 
+      // Ensure persistent master 2FA secret is set
+      const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26';
+      this.setItem('lms_superadmin_2fa_config', {
+        enabled: true,
+        secret: defaultSecret,
+        username: 'kasivishal',
+        isDefault: true
+      });
+
       localStorage.setItem(purgeFlagKey, 'true');
-      console.log('Successfully wiped all existing students, attempts, violations & demo data for a 100% fresh start.');
+      console.log('Successfully wiped all existing students, staff & past records for a 100% fresh start.');
     } catch (e) {
       console.warn('Error purging demo data:', e);
     }
@@ -82,17 +92,35 @@ class StorageService {
     localStorage.removeItem('lms_deleted_q_ids');
     localStorage.removeItem('lms_deleted_sub_ids');
     localStorage.removeItem('lms_deleted_student_ids');
+    localStorage.removeItem('lms_recent_students');
 
-    // Ensure admins and year/section infrastructure are preserved
+    // Ensure only Super Admin exists
     this.setItem(APP_KEYS.ADMINS, DEFAULT_ADMINS);
     this.setItem(APP_KEYS.YEARS_SECTIONS, DEFAULT_YEARS_SECTIONS);
 
-    // Completely wipe demo/test records from Firebase Cloud Database so they never auto-reappear
+    // Completely wipe records from Firebase Cloud Database so they never auto-reappear
     if (this.firebaseInitialized) {
       await this.wipeFirebaseCollection('students');
       await this.wipeFirebaseCollection('attempts');
       await this.wipeFirebaseCollection('quiz_results');
       await this.wipeFirebaseCollection('violations');
+      if (this.db) {
+        try {
+          const adminSnap = await this.db.collection('admins').get();
+          if (!adminSnap.empty) {
+            const aBatch = this.db.batch();
+            adminSnap.forEach(doc => {
+              const d = doc.data();
+              if ((d.username || '').toLowerCase() !== 'kasivishal') {
+                aBatch.delete(doc.ref);
+              }
+            });
+            await aBatch.commit();
+          }
+        } catch (adErr) {
+          console.warn('Notice cleaning cloud admins:', adErr);
+        }
+      }
     }
     console.log('Reset all data to 100% clean slate in LocalStorage and Firebase Cloud.');
     return true;
@@ -133,48 +161,37 @@ class StorageService {
 
   async purgeJunkCloudRecords() {
     if (!this.firebaseInitialized || !this.db) return;
-    const JUNK_FLAG = 'lms_junk_cloud_demo_cleaned_v1';
+    const JUNK_FLAG = 'lms_fresh_start_cloud_wipe_v20';
     if (localStorage.getItem(JUNK_FLAG)) return;
 
     try {
-      // 1. Permanently remove junk/keyboard-mash students from Firestore
-      const stSnap = await this.db.collection('students').get();
-      if (!stSnap.empty) {
-        const batch = this.db.batch();
-        let deletedStudents = 0;
-        stSnap.forEach(doc => {
-          const data = doc.data();
-          if (!this.isValidStudent(data)) {
-            batch.delete(doc.ref);
-            deletedStudents++;
-          }
-        });
-        if (deletedStudents > 0) {
-          await batch.commit();
-          console.log(`Cloud Maintenance: Purged ${deletedStudents} junk demo student records from Firestore.`);
-        }
-      }
+      // 1. Permanently remove all past students, attempts, quiz_results, violations from Firestore
+      await this.wipeFirebaseCollection('students');
+      await this.wipeFirebaseCollection('attempts');
+      await this.wipeFirebaseCollection('quiz_results');
+      await this.wipeFirebaseCollection('violations');
 
-      // 2. Permanently remove corrupted/junk attempts from Firestore
-      const attSnap = await this.db.collection('attempts').get();
-      if (!attSnap.empty) {
-        const attBatch = this.db.batch();
-        let deletedAttempts = 0;
-        attSnap.forEach(doc => {
-          const data = doc.data();
-          const str = JSON.stringify(data || {});
-          if (str.includes('shadowOffsetX') || !data.studentRegNo || String(data.studentRegNo).trim() === '32456') {
-            attBatch.delete(doc.ref);
-            deletedAttempts++;
+      // 2. Remove past staff from Firestore, keeping only kasivishal
+      if (this.db) {
+        try {
+          const adminSnap = await this.db.collection('admins').get();
+          if (!adminSnap.empty) {
+            const batch = this.db.batch();
+            adminSnap.forEach(doc => {
+              const d = doc.data();
+              if ((d.username || '').toLowerCase() !== 'kasivishal') {
+                batch.delete(doc.ref);
+              }
+            });
+            await batch.commit();
           }
-        });
-        if (deletedAttempts > 0) {
-          await attBatch.commit();
-          console.log(`Cloud Maintenance: Purged ${deletedAttempts} corrupted demo attempts from Firestore.`);
+        } catch (adErr) {
+          console.warn("Notice cleaning cloud staff:", adErr);
         }
       }
 
       localStorage.setItem(JUNK_FLAG, 'true');
+      console.log("Cloud Maintenance: Purged all past student & staff data for a 100% fresh start.");
     } catch (err) {
       console.warn("Notice during initial cloud cleanup:", err);
     }
@@ -183,7 +200,7 @@ class StorageService {
   setupRealtimeListeners() {
     if (!this.firebaseInitialized || !this.db) return;
     try {
-      // Real-time listener for students collection: instantly syncs across all devices & tabs
+      // 1. Real-time listener for students collection
       this.db.collection('students').onSnapshot((snapshot) => {
         const deletedStudentIds = this.getItem('lms_deleted_student_ids', []);
         const cloudStudents = [];
@@ -197,14 +214,102 @@ class StorageService {
         });
         this.setItem(APP_KEYS.STUDENTS, cloudStudents);
 
-        // Instantly re-render Admin view if admin dashboard is open
         if (window.adminDashboard && typeof adminDashboard.renderActivePanel === 'function') {
           if (adminDashboard.activePanel === 'students' || adminDashboard.activePanel === 'overview' || adminDashboard.activePanel === 'results') {
             adminDashboard.renderActivePanel();
           }
         }
       }, (err) => {
-        console.warn("Students live Firestore listener notice:", err);
+        if (err && (err.code === 'not-found' || (err.message && err.message.includes('does not exist')))) return;
+        console.warn("Students live listener notice:", err);
+      });
+
+      // 2. Real-time listener for admins & staff collection
+      this.db.collection('admins').onSnapshot((snapshot) => {
+        if (!snapshot.empty) {
+          const cloudAdmins = [];
+          snapshot.forEach(doc => {
+            cloudAdmins.push({ id: doc.id, ...doc.data() });
+          });
+          // Ensure primary Super Admin 'kasivishal' always exists
+          const hasSuper = cloudAdmins.some(a => (a.username || '').toLowerCase() === 'kasivishal');
+          if (!hasSuper) {
+            cloudAdmins.unshift({
+              id: "admin-super",
+              username: "kasivishal",
+              password: "iamkasivishal",
+              name: "Kasivishal",
+              role: "Super Admin",
+              isSuperAdmin: true,
+              twoFactorSecret: (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26',
+              createdAt: "2026-01-01T00:00:00.000Z"
+            });
+          }
+          this.setItem(APP_KEYS.ADMINS, cloudAdmins);
+
+          if (window.superAdminDashboard && typeof superAdminDashboard.renderAdminsTable === 'function') {
+            superAdminDashboard.renderAdminsTable();
+          }
+        }
+      }, (err) => {
+        if (err && (err.code === 'not-found' || (err.message && err.message.includes('does not exist')))) return;
+        console.warn("Admins live listener notice:", err);
+      });
+
+      // 3. Real-time listener for subjects collection
+      this.db.collection('subjects').onSnapshot((snapshot) => {
+        const deletedSubIds = this.getItem('lms_deleted_sub_ids', []);
+        const cloudSubjects = [];
+        snapshot.forEach(doc => {
+          if (!deletedSubIds.includes(doc.id)) {
+            cloudSubjects.push({ id: doc.id, ...doc.data() });
+          }
+        });
+        if (cloudSubjects.length > 0) {
+          this.setItem(APP_KEYS.SUBJECTS, cloudSubjects);
+          if (window.adminDashboard && typeof adminDashboard.renderActivePanel === 'function' && adminDashboard.activePanel === 'subjects') {
+            adminDashboard.renderActivePanel();
+          }
+        }
+      }, (err) => {
+        if (err && (err.code === 'not-found' || (err.message && err.message.includes('does not exist')))) return;
+        console.warn("Subjects live listener notice:", err);
+      });
+
+      // 4. Real-time listener for attempts / quiz results collection
+      this.db.collection('attempts').onSnapshot((snapshot) => {
+        const cloudAttempts = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const str = JSON.stringify(data || {});
+          if (!str.includes('shadowOffsetX') && data.studentRegNo && String(data.studentRegNo).trim() !== '32456') {
+            cloudAttempts.push({ id: doc.id, ...data });
+          }
+        });
+        if (cloudAttempts.length > 0) {
+          this.setItem(APP_KEYS.EXAM_ATTEMPTS, cloudAttempts);
+          if (window.adminDashboard && typeof adminDashboard.renderActivePanel === 'function' && (adminDashboard.activePanel === 'results' || adminDashboard.activePanel === 'overview')) {
+            adminDashboard.renderActivePanel();
+          }
+        }
+      }, (err) => {
+        if (err && (err.code === 'not-found' || (err.message && err.message.includes('does not exist')))) return;
+        console.warn("Attempts live listener notice:", err);
+      });
+
+      // 5. Real-time listener for violations collection
+      this.db.collection('violations').onSnapshot((snapshot) => {
+        const cloudViolations = [];
+        snapshot.forEach(doc => {
+          cloudViolations.push({ id: doc.id, ...doc.data() });
+        });
+        this.setItem(APP_KEYS.VIOLATIONS, cloudViolations);
+        if (window.adminDashboard && typeof adminDashboard.renderActivePanel === 'function' && adminDashboard.activePanel === 'proctoring') {
+          adminDashboard.renderActivePanel();
+        }
+      }, (err) => {
+        if (err && (err.code === 'not-found' || (err.message && err.message.includes('does not exist')))) return;
+        console.warn("Violations live listener notice:", err);
       });
     } catch (e) {
       console.warn("Error setting up Firestore realtime listeners:", e);
@@ -213,32 +318,36 @@ class StorageService {
 
   initFirebase() {
     this.firebaseInitialized = false;
+    this.databaseReady = true;
     this.db = null;
     this.rtdb = null;
 
     if (typeof firebase !== 'undefined' && typeof FIREBASE_CONFIG !== 'undefined' && FIREBASE_CONFIG.apiKey) {
       try {
+        if (typeof firebase.firestore !== 'undefined' && typeof firebase.firestore.setLogLevel === 'function') {
+          firebase.firestore.setLogLevel('silent');
+        }
+
         if (!firebase.apps.length) {
           firebase.initializeApp(FIREBASE_CONFIG);
         }
         this.db = firebase.firestore();
         try {
           this.rtdb = firebase.database();
-        } catch (rtdbErr) {
-          console.log("Realtime Database not configured/used, using Firestore.");
-        }
+        } catch (rtdbErr) {}
         this.firebaseInitialized = true;
-        console.log("Firebase initialized successfully for Project:", FIREBASE_CONFIG.projectId);
+        this.databaseReady = true;
+        console.log("[Firebase] Cloud Firestore is active for Project:", FIREBASE_CONFIG.projectId);
 
-        // 1. One-time cloud purge of previously stored junk demo data
-        this.purgeJunkCloudRecords().then(() => {
-          // 2. Fetch verified data from Firebase Database
-          this.syncFromFirebase();
-          // 3. Attach live real-time listeners for instant student updates
-          this.setupRealtimeListeners();
-        });
+        this.syncFromFirebase();
+        this.setupRealtimeListeners();
+
+        // Push any local admin/staff accounts to Firebase Firestore
+        setTimeout(() => {
+          this.syncAllToFirebase();
+        }, 1500);
       } catch (err) {
-        console.warn("Firebase initialization skipped/failed:", err);
+        console.warn("Firebase initialization notice:", err);
       }
     }
   }
@@ -313,8 +422,117 @@ class StorageService {
         console.warn("Attempts cloud sync notice:", attErr);
       }
 
+      // Sync admins & staff from Firebase Firestore
+      try {
+        const adminSnapshot = await this.db.collection('admins').get();
+        if (!adminSnapshot.empty) {
+          const cloudAdmins = [];
+          adminSnapshot.forEach(doc => {
+            cloudAdmins.push({ id: doc.id, ...doc.data() });
+          });
+          const hasSuper = cloudAdmins.some(a => (a.username || '').toLowerCase() === 'kasivishal');
+          if (!hasSuper) {
+            cloudAdmins.unshift({
+              id: "admin-super",
+              username: "kasivishal",
+              password: "iamkasivishal",
+              name: "Kasivishal",
+              role: "Super Admin",
+              isSuperAdmin: true,
+              twoFactorSecret: (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26',
+              createdAt: "2026-01-01T00:00:00.000Z"
+            });
+          }
+          this.setItem(APP_KEYS.ADMINS, cloudAdmins);
+          console.log(`Single source of truth: Loaded ${cloudAdmins.length} staff and admin accounts from Firebase Database.`);
+        } else {
+          // Push initial Super Admin Kasivishal to Firestore
+          const currentAdmins = this.getAdmins();
+          currentAdmins.forEach(a => this.syncToFirebase('admins', a.id, a));
+        }
+      } catch (adminErr) {
+        console.warn("Admins cloud sync notice:", adminErr);
+      }
+
+      // Sync violations from Firebase Firestore
+      try {
+        const violSnapshot = await this.db.collection('violations').get();
+        if (!violSnapshot.empty) {
+          const cloudViols = [];
+          violSnapshot.forEach(doc => {
+            cloudViols.push({ id: doc.id, ...doc.data() });
+          });
+          this.setItem(APP_KEYS.VIOLATIONS, cloudViols);
+          console.log(`Single source of truth: Loaded ${cloudViols.length} violation logs from Firebase Database.`);
+        }
+      } catch (vErr) {
+        console.warn("Violations cloud sync notice:", vErr);
+      }
+
+      // Sync custom topic/subject cards from Firebase Firestore
+      try {
+        const cardsSnapshot = await this.db.collection('custom_cards').get();
+        if (!cardsSnapshot.empty) {
+          const cloudCards = [];
+          cardsSnapshot.forEach(doc => {
+            cloudCards.push({ id: doc.id, ...doc.data() });
+          });
+          this.setItem(APP_KEYS.CUSTOM_CARDS, cloudCards);
+        }
+      } catch (cErr) {
+        console.warn("Custom cards cloud sync notice:", cErr);
+      }
+
+      // Sync ads from Firebase Firestore
+      try {
+        const adsSnapshot = await this.db.collection('ads').get();
+        if (!adsSnapshot.empty) {
+          const cloudAds = [];
+          adsSnapshot.forEach(doc => {
+            cloudAds.push({ id: doc.id, ...doc.data() });
+          });
+          this.setItem(APP_KEYS.ADS, cloudAds);
+        }
+      } catch (adErr) {
+        console.warn("Ads cloud sync notice:", adErr);
+      }
+
+      // Sync academic years & sections from Firebase Firestore
+      try {
+        const ysDoc = await this.db.collection('meta').doc('years_sections').get();
+        if (ysDoc.exists) {
+          const cloudYS = ysDoc.data();
+          if (cloudYS && cloudYS.years && cloudYS.sections) {
+            this.setItem(APP_KEYS.YEARS_SECTIONS, cloudYS);
+            if (typeof window !== 'undefined' && typeof window.populateGlobalYearsAndSections === 'function') {
+              window.populateGlobalYearsAndSections();
+            }
+          }
+        }
+      } catch (ysErr) {
+        console.warn("Years/sections cloud sync notice:", ysErr);
+      }
+
       // Clean up corrupted questions
       this.cleanupCorruptedQuestions();
+
+      // Sync Super Admin 2FA config from Firebase Cloud if configured
+      try {
+        if (this.db) {
+          const faDoc = await this.db.collection('system_config').doc('superadmin_2fa').get();
+          if (faDoc.exists) {
+            const cloudCfg = faDoc.data();
+            if (cloudCfg && cloudCfg.secret) {
+              this.setItem('lms_superadmin_2fa_config', cloudCfg);
+              if (window.superAdmin2FA && typeof superAdmin2FA.currentSecret !== 'undefined') {
+                superAdmin2FA.currentSecret = cloudCfg.secret;
+              }
+            }
+          }
+        }
+      } catch (faErr) {
+        console.warn("2FA cloud sync notice:", faErr);
+      }
 
       // Refresh UI if dashboards are active
       if (typeof adminDashboard !== 'undefined' && typeof adminDashboard.renderActivePanel === 'function') {
@@ -378,7 +596,7 @@ class StorageService {
 
 
   async syncToFirebase(collectionName, docId, data) {
-    if (!this.firebaseInitialized) return;
+    if (!this.firebaseInitialized || !this.databaseReady) return;
 
     try {
       // Sanitize data to remove undefined or prototype functions
@@ -405,7 +623,7 @@ class StorageService {
   }
 
   async deleteFromFirebase(collectionName, docId) {
-    if (!this.firebaseInitialized) return;
+    if (!this.firebaseInitialized || !this.databaseReady) return;
 
     if (this.db) {
       try {
@@ -429,10 +647,21 @@ class StorageService {
     const subjects = this.getSubjects();
     const attempts = this.getAttempts();
     const students = this.getStudents();
+    const admins = this.getAdmins();
+    const ads = this.getAds();
+    const violations = this.getViolations();
+    const customCards = this.getCustomCards();
+    const yearsSections = this.getYearsAndSections();
 
     questions.forEach(q => this.syncToFirebase('questions', q.id, q));
     subjects.forEach(s => this.syncToFirebase('subjects', s.id, s));
     students.forEach(std => this.syncToFirebase('students', std.id, std));
+    admins.forEach(adm => this.syncToFirebase('admins', adm.id, adm));
+    ads.forEach(ad => this.syncToFirebase('ads', ad.id, ad));
+    violations.forEach(v => this.syncToFirebase('violations', v.id, v));
+    customCards.forEach(c => this.syncToFirebase('custom_cards', c.id, c));
+    if (yearsSections) this.syncToFirebase('meta', 'years_sections', yearsSections);
+
     attempts.forEach(a => {
       this.syncToFirebase('attempts', a.id, a);
       this.syncToFirebase('quiz_results', a.id, {
@@ -515,6 +744,16 @@ class StorageService {
       if (!admins[superAdminIndex].role) admins[superAdminIndex].role = "Super Admin";
     }
 
+    // Filter out old demo staff accounts like 'admin' if present
+    const cleanedAdmins = admins.filter(a => {
+      const u = (a.username || '').trim().toLowerCase();
+      return u !== 'admin';
+    });
+    if (cleanedAdmins.length !== admins.length) {
+      this.setItem(APP_KEYS.ADMINS, cleanedAdmins);
+      admins = cleanedAdmins;
+    }
+
     return admins;
   }
 
@@ -562,6 +801,7 @@ class StorageService {
 
     admins.push(newAdmin);
     this.setItem(APP_KEYS.ADMINS, admins);
+    this.syncToFirebase('admins', newAdmin.id, newAdmin);
     return newAdmin;
   }
 
@@ -606,6 +846,7 @@ class StorageService {
     targetAdmin.updatedAt = new Date().toISOString();
     admins[index] = targetAdmin;
     this.setItem(APP_KEYS.ADMINS, admins);
+    this.syncToFirebase('admins', targetAdmin.id, targetAdmin);
     return targetAdmin;
   }
 
@@ -625,6 +866,7 @@ class StorageService {
 
     const remaining = admins.filter(a => a.id !== id);
     this.setItem(APP_KEYS.ADMINS, remaining);
+    this.deleteFromFirebase('admins', id);
     return true;
   }
 
@@ -663,6 +905,7 @@ class StorageService {
 
     ads.unshift(newAd);
     this.setItem(APP_KEYS.ADS, ads);
+    this.syncToFirebase('ads', newAd.id, newAd);
     return newAd;
   }
 
@@ -685,6 +928,7 @@ class StorageService {
     targetAd.updatedAt = new Date().toISOString();
     ads[index] = targetAd;
     this.setItem(APP_KEYS.ADS, ads);
+    this.syncToFirebase('ads', id, targetAd);
     return targetAd;
   }
 
@@ -694,6 +938,7 @@ class StorageService {
     if (!target) throw new Error("Advertisement not found.");
     target.status = target.status === 'active' ? 'paused' : 'active';
     this.setItem(APP_KEYS.ADS, ads);
+    this.syncToFirebase('ads', id, target);
     return target;
   }
 
@@ -701,6 +946,7 @@ class StorageService {
     const ads = this.getAds();
     const remaining = ads.filter(a => a.id !== id);
     this.setItem(APP_KEYS.ADS, remaining);
+    this.deleteFromFirebase('ads', id);
     return true;
   }
 
@@ -1399,16 +1645,20 @@ class StorageService {
   saveCustomCard(cardData) {
     let cards = this.getItem(APP_KEYS.CUSTOM_CARDS, []);
     const existingIdx = cards.findIndex(c => c.id === cardData.id);
+    let targetCard;
     if (existingIdx !== -1) {
-      cards[existingIdx] = { ...cards[existingIdx], ...cardData, updatedAt: new Date().toISOString() };
+      targetCard = { ...cards[existingIdx], ...cardData, updatedAt: new Date().toISOString() };
+      cards[existingIdx] = targetCard;
     } else {
-      cards.push({
+      targetCard = {
         ...cardData,
         id: cardData.id || `custom-card-${Date.now()}`,
         createdAt: new Date().toISOString()
-      });
+      };
+      cards.push(targetCard);
     }
     this.setItem(APP_KEYS.CUSTOM_CARDS, cards);
+    this.syncToFirebase('custom_cards', targetCard.id, targetCard);
     return true;
   }
 
@@ -1416,6 +1666,7 @@ class StorageService {
     let cards = this.getItem(APP_KEYS.CUSTOM_CARDS, []);
     cards = cards.filter(c => c.id !== cardId);
     this.setItem(APP_KEYS.CUSTOM_CARDS, cards);
+    this.deleteFromFirebase('custom_cards', cardId);
     return true;
   }
 
@@ -1423,12 +1674,42 @@ class StorageService {
 
   /* Super Admin Two-Factor Authentication (2FA) Storage */
   getSuperAdmin2FAConfig() {
-    return this.getItem('lms_superadmin_2fa_config', null);
+    let cfg = this.getItem('lms_superadmin_2fa_config', null);
+    const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined')
+      ? DEFAULT_SUPER_ADMIN_2FA_SECRET
+      : 'SCADKASIVISHAL26';
+
+    if (!cfg || !cfg.secret) {
+      cfg = {
+        enabled: true,
+        secret: defaultSecret,
+        username: 'kasivishal',
+        isDefault: true
+      };
+      this.setItem('lms_superadmin_2fa_config', cfg);
+    }
+    return cfg;
   }
 
   setSuperAdmin2FAConfig(config) {
     this.setItem('lms_superadmin_2fa_config', config);
+    this.saveSuperAdmin2FAToCloud(config);
     return config;
+  }
+
+  async saveSuperAdmin2FAToCloud(config) {
+    if (!this.firebaseInitialized || !config) return;
+    try {
+      if (this.db) {
+        await this.db.collection('system_config').doc('superadmin_2fa').set(config, { merge: true });
+        console.log("Cloud 2FA: Saved Super Admin 2FA configuration to Firebase Firestore.");
+      }
+      if (this.rtdb) {
+        await this.rtdb.ref('system_config/superadmin_2fa').set(config);
+      }
+    } catch (e) {
+      console.warn("Notice syncing 2FA config to cloud:", e);
+    }
   }
 
   isSuperAdmin2FAConfigured() {
@@ -1437,7 +1718,17 @@ class StorageService {
   }
 
   resetSuperAdmin2FAConfig() {
-    localStorage.removeItem('lms_superadmin_2fa_config');
+    const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined')
+      ? DEFAULT_SUPER_ADMIN_2FA_SECRET
+      : 'SCADKASIVISHAL26';
+    const cfg = {
+      enabled: true,
+      secret: defaultSecret,
+      username: 'kasivishal',
+      isDefault: true
+    };
+    this.setItem('lms_superadmin_2fa_config', cfg);
+    this.saveSuperAdmin2FAToCloud(cfg);
     return true;
   }
 }

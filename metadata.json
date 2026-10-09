@@ -1,0 +1,7 @@
+{
+  "name": "College Learning & Online Exam Portal",
+  "description": "SCAD College of Engineering & Technology - Student Portal & Online Examination System",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

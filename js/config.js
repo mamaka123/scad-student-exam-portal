@@ -66,6 +66,8 @@ const DEFAULT_YEARS_SECTIONS = {
   sections: ["A", "B", "C"]
 };
 
+const DEFAULT_SUPER_ADMIN_2FA_SECRET = 'SCADKASIVISHAL26';
+
 const DEFAULT_ADMINS = [
   {
     id: "admin-super",
@@ -74,15 +76,7 @@ const DEFAULT_ADMINS = [
     name: "Kasivishal",
     role: "Super Admin",
     isSuperAdmin: true,
-    createdAt: "2026-01-01T00:00:00.000Z"
-  },
-  {
-    id: "admin-1",
-    username: "admin",
-    password: "admin123",
-    name: "System Administrator",
-    role: "Admin",
-    isSuperAdmin: false,
+    twoFactorSecret: DEFAULT_SUPER_ADMIN_2FA_SECRET,
     createdAt: "2026-01-01T00:00:00.000Z"
   }
 ];
@@ -94,15 +88,16 @@ const DEFAULT_QUESTIONS = [];
 const DEFAULT_ATTEMPTS = [];
 const DEFAULT_VIOLATIONS = [];
 
-/* Firebase Configuration from google-services.json */
+/* Firebase Configuration for Project: scad-student-test-portal */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCwHHLNywFW7zO0i3vxS0RJO52s8akBdx4",
-  authDomain: "student-login-19524.firebaseapp.com",
-  projectId: "student-login-19524",
-  storageBucket: "student-login-19524.firebasestorage.app",
-  messagingSenderId: "717546985351",
-  appId: "1:717546985351:android:197296f553de495918e522",
-  databaseURL: "https://student-login-19524-default-rtdb.firebaseio.com"
+  apiKey: "AIzaSyCdtGRbv1XWTROWCPyVbYBBvoe0QVnLDyE",
+  authDomain: "scad-student-test-portal.firebaseapp.com",
+  projectId: "scad-student-test-portal",
+  storageBucket: "scad-student-test-portal.firebasestorage.app",
+  messagingSenderId: "1049951251504",
+  appId: "1:1049951251504:web:0a00d6849025bb42f0d1f5",
+  measurementId: "G-KZEZRSK0F1",
+  databaseURL: "https://scad-student-test-portal-default-rtdb.firebaseio.com"
 };
 
 window.APP_KEYS = APP_KEYS;
@@ -110,6 +105,7 @@ window.AD_PLACEMENTS = AD_PLACEMENTS;
 window.AD_NETWORKS = AD_NETWORKS;
 window.BANNER_SIZES = BANNER_SIZES;
 window.DEFAULT_YEARS_SECTIONS = DEFAULT_YEARS_SECTIONS;
+window.DEFAULT_SUPER_ADMIN_2FA_SECRET = DEFAULT_SUPER_ADMIN_2FA_SECRET;
 window.DEFAULT_ADMINS = DEFAULT_ADMINS;
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;
 

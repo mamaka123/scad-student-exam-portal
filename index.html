@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>College Learning & Online Exam Portal</title>
+  <meta name="description" content="SCAD College of Engineering & Technology - Student Portal & Online Examination System">
+  <meta property="og:title" content="College Learning & Online Exam Portal">
+  <meta property="og:description" content="SCAD College of Engineering & Technology - Student Portal & Online Examination System">
   <link rel="icon" type="image/png" href="images/scad_logo.png">
 
   <!-- Google Fonts -->
@@ -1147,8 +1150,9 @@
             </button>
           </form>
 
-          <div style="text-align: center; margin-top: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
             <a href="javascript:void(0)" onclick="superAdmin2FA.cancel()" style="font-size: 0.82rem; color: #64748b; font-weight: 600; text-decoration: none;">&larr; Cancel and return to login</a>
+            <a href="javascript:void(0)" onclick="superAdmin2FA.showVerifyCard()" style="font-size: 0.82rem; color: #3b82f6; font-weight: 700; text-decoration: none;">&rarr; Enter 6-Digit Code</a>
           </div>
         </div>
 
@@ -1198,8 +1202,11 @@
             </button>
           </form>
 
-          <div style="display: flex; justify-content: center; align-items: center; margin-top: 1.25rem; font-size: 0.8rem; border-top: 1px solid var(--bg-dark-border, #f1f5f9); padding-top: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; font-size: 0.8rem; border-top: 1px solid var(--bg-dark-border, #f1f5f9); padding-top: 0.85rem;">
             <a href="javascript:void(0)" onclick="superAdmin2FA.cancel()" style="color: #64748b; font-weight: 600; text-decoration: none;">&larr; Back to Login</a>
+            <a href="javascript:void(0)" onclick="superAdmin2FA.showSetupCard(false)" style="color: #d97706; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem;">
+              <span>📱 View QR Code / Setup Key</span>
+            </a>
           </div>
         </div>
 
@@ -2490,8 +2497,8 @@
             </div>
           </div>
 
-          <button type="button" class="btn btn-sm" onclick="if(confirm('Do you want to re-scan/reset 2FA on your Authenticator App?')) { storage.resetSuperAdmin2FAConfig(); ui.showToast('2FA reset. Please scan new QR code on your next login or right now.', 'info'); ui.showView('super-admin-2fa-view'); superAdmin2FA.init(true); }" title="2FA Authenticator Security Active (Click to Re-scan QR code)" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.74rem; padding: 0.35rem 0.65rem; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700; cursor: pointer;">
-            <span>🛡️ 2FA Active</span>
+          <button type="button" class="btn btn-sm" onclick="ui.showView('super-admin-2fa-view'); superAdmin2FA.showSetupCard(false);" title="2FA Authenticator Security Active (Click to View QR code)" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.74rem; padding: 0.35rem 0.65rem; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-weight: 700; cursor: pointer;">
+            <span>🛡️ 2FA Active (View QR)</span>
           </button>
 
           <button type="button" class="btn btn-secondary btn-sm" onclick="ui.showView('admin-dashboard-view'); if(window.adminDashboard) adminDashboard.init();" title="View Faculty LMS Dashboard" style="font-size: 0.76rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 600;">

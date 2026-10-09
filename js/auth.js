@@ -153,13 +153,9 @@ class AuthService {
 
     if (isSuper) {
       // Super Admin REQUIRES mandatory Two-Factor Authentication (2FA) verification
-      const isConfigured = (window.storage && typeof storage.isSuperAdmin2FAConfigured === 'function')
-        ? storage.isSuperAdmin2FAConfigured()
-        : false;
-
       return {
         requires2FA: true,
-        isFresher: !isConfigured,
+        isFresher: false, // Do not force QR code screen; proceed directly to 6-digit verification code entry
         user: {
           id: admin.id,
           name: admin.name,
@@ -202,7 +198,9 @@ class AuthService {
       throw new Error("Authentication code must be exactly 6 digits.");
     }
 
-    const isValid = window.totpService.verifyCode(cleanCode, secret);
+    const defaultSecret = (typeof DEFAULT_SUPER_ADMIN_2FA_SECRET !== 'undefined') ? DEFAULT_SUPER_ADMIN_2FA_SECRET : 'SCADKASIVISHAL26';
+    const activeSecret = secret || (window.storage && typeof storage.getSuperAdmin2FAConfig === 'function' ? storage.getSuperAdmin2FAConfig().secret : defaultSecret);
+    const isValid = window.totpService.verifyCode(cleanCode, activeSecret);
     if (!isValid) {
       throw new Error("Invalid 6-digit authentication code! Please check your Google Authenticator or Microsoft Authenticator app and try again.");
     }
